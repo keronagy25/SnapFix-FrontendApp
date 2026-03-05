@@ -1,17 +1,16 @@
 import { create } from "zustand";
-import type {
-  AuthState,
-  UserRole,
-  CustomerProfile,
-  ProviderProfile,
-} from "@/types";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import type { AuthState, UserRole, CustomerProfile, ProviderProfile } from "@/types";
+
+const TOKEN_KEY = "snapfix_auth_token";
 
 interface AuthActions {
-  setRole:   (role: UserRole) => void;
-  setUser:   (user: CustomerProfile | ProviderProfile) => void;
-  setToken:  (token: string) => void;
-  logout:    () => void;
-  setLoading:(loading: boolean) => void;
+  setRole:        (role: UserRole) => void;
+  setUser:        (user: CustomerProfile | ProviderProfile) => void;
+  setToken:       (token: string) => void;
+  setLoading:     (loading: boolean) => void;
+  logout:         () => Promise<void>;
+  hydrateToken:   () => Promise<string | null>;
 }
 
 const initialState: AuthState = {
@@ -34,9 +33,30 @@ export const useAuthStore = create<AuthState & AuthActions>((set) => ({
       isAuthenticated: true,
     }),
 
-  setToken: (token) => set({ token }),
+  setToken: (token) => {
+    // Persist to device storage
+    AsyncStorage.setItem(TOKEN_KEY, token).catch(console.error);
+    set({ token });
+  },
 
   setLoading: (isLoading) => set({ isLoading }),
 
-  logout: () => set({ ...initialState }),
+  logout: async () => {
+    await AsyncStorage.removeItem(TOKEN_KEY).catch(console.error);
+    set({ ...initialState });
+  },
+
+  /**
+   * Call this once on app startup (e.g. in your root _layout.tsx).
+   * Returns the token if one was persisted, null otherwise.
+   */
+  hydrateToken: async () => {
+    try {
+      const token = await AsyncStorage.getItem(TOKEN_KEY);
+      if (token) set({ token });
+      return token;
+    } catch {
+      return null;
+    }
+  },
 }));
