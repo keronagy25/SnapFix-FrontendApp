@@ -8,7 +8,7 @@ import { MotiView } from "moti";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   MapPin, Bell, Search, Star, ChevronRight,
-  Clock, TrendingUp, CheckCircle,
+  Clock, TrendingUp, CheckCircle, Calendar,
 } from "lucide-react-native";
 import { useAuthStore } from "@/store/authStore";
 import { useBookingStore } from "@/store/bookingstore";
@@ -90,6 +90,11 @@ export default function CustomerHomeScreen() {
       : (r.width - r.px * 2 - r.gap) / 2
     : "100%";
 
+  /* ── Navigate to Bookings ── */
+  const handleViewBookings = () => {
+    router.push("/(customer)/booking/booking");
+  };
+
   /* ── 1. Category → select-expert filtered by serviceId ── */
   const handleCategoryPress = (cat: Category) => {
     setService(cat.id, cat.label, cat.emoji);
@@ -158,12 +163,31 @@ export default function CustomerHomeScreen() {
                 </TouchableOpacity>
               </MotiView>
 
-              <MotiView from={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 100, type: "spring", damping: 14 }}>
-                <TouchableOpacity style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
-                  <Bell size={20} color="#fff" />
-                  <View style={{ position: "absolute", top: 9, right: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: "#06B6D4", borderWidth: 1.5, borderColor: "#1E3A8A" }} />
-                </TouchableOpacity>
-              </MotiView>
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                {/* My Bookings Button */}
+                <MotiView from={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 100, type: "spring", damping: 14 }}>
+                  <TouchableOpacity 
+                    onPress={handleViewBookings}
+                    style={{ 
+                      width: 42, 
+                      height: 42, 
+                      borderRadius: 14, 
+                      backgroundColor: "rgba(255,255,255,0.15)", 
+                      alignItems: "center", 
+                      justifyContent: "center" 
+                    }}>
+                    <Calendar size={20} color="#fff" />
+                  </TouchableOpacity>
+                </MotiView>
+
+                {/* Notification Bell */}
+                <MotiView from={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 100, type: "spring", damping: 14 }}>
+                  <TouchableOpacity style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+                    <Bell size={20} color="#fff" />
+                    <View style={{ position: "absolute", top: 9, right: 9, width: 8, height: 8, borderRadius: 4, backgroundColor: "#06B6D4", borderWidth: 1.5, borderColor: "#1E3A8A" }} />
+                  </TouchableOpacity>
+                </MotiView>
+              </View>
             </View>
 
             <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 150, type: "timing", duration: 500 }} style={{ marginBottom: 24 }}>

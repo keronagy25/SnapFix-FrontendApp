@@ -7,6 +7,7 @@ export default function BookingLayout() {
       <Stack.Screen name="select-expert"   />
       <Stack.Screen name="schedule"        />
       <Stack.Screen name="payment"         />
+      <Stack.Screen name="booking"         />
     </Stack>
   );
 }
