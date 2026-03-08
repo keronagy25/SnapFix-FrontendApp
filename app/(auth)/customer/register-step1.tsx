@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TouchableOpacity } from "react-native";
 import { router } from "expo-router";
 import { MotiView } from "moti";
-import { User, Mail, ArrowLeft } from "lucide-react-native";
+import { User, Mail, Phone, ArrowLeft } from "lucide-react-native";
 import { ScreenWrapper } from "@/components/shared/ScreenWrapper";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -32,6 +32,7 @@ const StepProgress: React.FC<{ current: number; total: number; color: string }> 
 /* ─── Validation helpers ─── */
 const isValidName  = (v: string) => v.trim().length >= 2;
 const isValidEmail = (v: string) => /\S+@\S+\.\S+/.test(v);
+const isValidPhone = (v: string) => /^[+]?[\d\s\-()]{7,15}$/.test(v.trim());
 
 /* ══════════════════════════════════════════════════════════════════ */
 
@@ -40,12 +41,14 @@ export default function CustomerRegisterStep1() {
     first_name: "",
     last_name:  "",
     email:      "",
+    phone:      "",
   });
 
   const [errors, setErrors] = useState<{
     first_name?: string;
     last_name?:  string;
     email?:      string;
+    phone?:      string;
   }>({});
 
   const update = (field: keyof typeof form) => (value: string) => {
@@ -61,6 +64,8 @@ export default function CustomerRegisterStep1() {
       newErrors.last_name = "Last name must be at least 2 characters";
     if (!isValidEmail(form.email))
       newErrors.email = "Please enter a valid email address";
+    if (!isValidPhone(form.phone))
+      newErrors.phone = "Please enter a valid phone number";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -168,6 +173,18 @@ export default function CustomerRegisterStep1() {
           autoCorrect={false}
           returnKeyType="next"
           leftIcon={<Mail size={18} color={Colors.text.secondary} />}
+        />
+
+        <Input
+          label="Phone Number"
+          isRequired
+          placeholder="+20 100 000 0000"
+          value={form.phone}
+          onChangeText={update("phone")}
+          error={errors.phone}
+          keyboardType="phone-pad"
+          returnKeyType="done"
+          leftIcon={<Phone size={18} color={Colors.text.secondary} />}
         />
       </MotiView>
 

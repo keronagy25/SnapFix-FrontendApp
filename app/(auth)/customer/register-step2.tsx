@@ -39,6 +39,7 @@ export default function CustomerRegisterStep2() {
     first_name: string;
     last_name:  string;
     email:      string;
+    phone:      string;
   }>();
 
   const [password,        setPassword]        = useState("");
@@ -51,8 +52,6 @@ export default function CustomerRegisterStep2() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
-  const setToken   = useAuthStore((s) => s.setToken);
-  const setUser    = useAuthStore((s) => s.setUser);
   const setLoading = useAuthStore((s) => s.setLoading);
 
   /* ─── Validation ─── */
@@ -74,27 +73,20 @@ export default function CustomerRegisterStep2() {
     setLoading(true);
 
     try {
-      // 1. Register → get token
-      const { token } = await customerRegister({
+      await customerRegister({
         first_name: params.first_name,
         last_name:  params.last_name,
         email:      params.email,
+        phone:      params.phone,
         password,
       });
-      
-      // Don't set token or user - we want them to login manually
-      // setToken(token);
-      // const profile = await getCustomerProfile(token);
-      // setUser({ ...profile, role: "customer" });
 
-      // 2. Success state → show success message then go to login
       setIsSuccess(true);
       setTimeout(() => {
         router.replace("/(auth)/login");
       }, 1500);
 
     } catch (err: any) {
-      // Parse Django field errors (e.g. { email: ["already exists"] })
       const data = err?.data ?? {};
       const firstError =
         Object.values(data as Record<string, string[]>)
@@ -183,6 +175,7 @@ export default function CustomerRegisterStep2() {
           { label: "First", value: params.first_name, emoji: "👤" },
           { label: "Last",  value: params.last_name,  emoji: "👤" },
           { label: "Email", value: params.email,      emoji: "📧" },
+          { label: "Phone", value: params.phone,      emoji: "📱" },
         ].map((item) => (
           <View key={item.label} style={{
             flexDirection: "row", alignItems: "center",
@@ -318,23 +311,19 @@ export default function CustomerRegisterStep2() {
           marginBottom: 20,
         }}
       >
-        <Text
-          style={{
-            fontFamily: Typography.fonts.regular,
-            fontSize: Typography.sizes.base,
-            color: Colors.text.secondary,
-          }}
-        >
+        <Text style={{
+          fontFamily: Typography.fonts.regular,
+          fontSize: Typography.sizes.base,
+          color: Colors.text.secondary,
+        }}>
           Already have an account?{" "}
         </Text>
         <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-          <Text
-            style={{
-              fontFamily: Typography.fonts.semibold,
-              fontSize: Typography.sizes.base,
-              color: Colors.primary.DEFAULT,
-            }}
-          >
+          <Text style={{
+            fontFamily: Typography.fonts.semibold,
+            fontSize: Typography.sizes.base,
+            color: Colors.primary.DEFAULT,
+          }}>
             Sign In
           </Text>
         </TouchableOpacity>
