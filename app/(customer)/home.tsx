@@ -129,7 +129,7 @@ function NavigationDrawer({
 
   const handleLogout = () => {
     onClose();
-    setTimeout(() => router.replace("/(auth)/login" as any), 250);
+    setTimeout(() => router.replace("/(auth)/role-select" as any), 250);
   };
 
   const firstName = user?.first_name ?? "User";
