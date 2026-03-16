@@ -1,26 +1,26 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Alert } from "react-native";
-import { router }        from "expo-router";
-import { MotiView }      from "moti";
-import { Mail, Lock, ArrowLeft } from "lucide-react-native";
-import { ScreenWrapper } from "@/components/shared/ScreenWrapper";
-import { Button }        from "@/components/ui/Button";
-import { Input }         from "@/components/ui/Input";
-import { useAuthStore }  from "@/store/authStore";
-import { Colors }        from "@/theme/colors";
-import { Typography }    from "@/theme/typography";
-import { providerLogin } from "@/services/authService";
+import {
+  View, Text, TouchableOpacity, Alert,
+  ActivityIndicator, TextInput, StatusBar, Platform,
+} from "react-native";
+import { router }         from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { Mail, Lock, ArrowLeft, Eye, EyeOff, AlertCircle } from "lucide-react-native";
+import { useAuthStore }       from "@/store/authStore";
+import { Typography }         from "@/theme/typography";
+import { providerLogin }      from "@/services/authService";
 import { getProviderProfile } from "@/services/providerService";
 
 export default function ProviderLoginScreen() {
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
-  const [errors,   setErrors]   = useState<{ email?: string; password?: string }>({});
+  const [showPass, setShowPass] = useState(false);
+  const [loading,  setLoading]  = useState(false);
+  const [errors,   setErrors]   = useState<{ email?:string; password?:string; general?:string }>({});
 
-  const setToken   = useAuthStore((s) => s.setToken);
-  const setUser    = useAuthStore((s) => s.setUser);
-  const isLoading  = useAuthStore((s) => s.isLoading);
-  const setLoading = useAuthStore((s) => s.setLoading);
+  const setToken = useAuthStore((s) => s.setToken);
+  const setUser  = useAuthStore((s) => s.setUser);
+  const setRole  = useAuthStore((s) => s.setRole);
 
   const validate = () => {
     const e: typeof errors = {};
@@ -38,41 +38,51 @@ export default function ProviderLoginScreen() {
     setErrors({});
 
     try {
-      // POST /api/v1/providers/login/
-      const { token } = await providerLogin({ email, password });
-      setToken(token);
+      const res = await providerLogin({ email: email.trim(), password });
+      if (!res?.token) throw new Error("No token received from server.");
 
-      // Fetch provider profile
+      setToken(res.token);
+      setRole("provider");
+
+      // fetch profile → check verification_status
+      let profile: any = null;
       try {
-        const profile = await getProviderProfile(token);
-        setUser({
-          ...profile,
-          role:       "provider",
-          profession: profile.profession ?? undefined,
-          bio:        profile.bio        ?? undefined,
-        } as any);
+        profile = await getProviderProfile(res.token);
+        setUser({ ...profile, role: "provider" } as any);
       } catch {
-        setUser({ role: "provider" } as any);
+        setUser({ role: "provider", email: email.trim() } as any);
       }
 
-      router.replace("/(provider)/dashboard");
+      const status = profile?.verification_status ?? "pending";
+      if (status === "verified") {
+        router.replace("/(provider)/dashboard" as any);
+      } else {
+        router.replace("/(auth)/provider/pending" as any);
+      }
 
     } catch (err: any) {
-      const data = err?.data;
-      const nonFieldError = data?.non_field_errors?.[0] ?? "";
+      console.log("[ProviderLogin] ERROR:", JSON.stringify(err?.data ?? err?.message ?? err));
+      const data = err?.data ?? {};
 
-      // ── Not verified yet → go to pending screen ──
-      if (nonFieldError.toLowerCase().includes("not verified")) {
-        router.replace("/(auth)/provider/pending");
+      // check if pending from error message
+      const nonField = data?.non_field_errors?.[0] ?? "";
+      if (nonField.toLowerCase().includes("not verified") || nonField.toLowerCase().includes("pending")) {
+        setRole("provider");
+        setUser({ role:"provider", email: email.trim() } as any);
+        router.replace("/(auth)/provider/pending" as any);
         return;
       }
 
-      let msg = "Login failed. Please check your credentials.";
-      if (nonFieldError)       msg = nonFieldError;
-      else if (data?.detail)   msg = data.detail;
-      else if (data?.email)    msg = Array.isArray(data.email) ? data.email[0] : data.email;
-      else if (err?.message)   msg = err.message;
+      let msg = "Incorrect email or password. Please try again.";
+      if (nonField)             msg = nonField;
+      else if (data?.detail)    msg = data.detail;
+      else if (data?.email?.[0])msg = data.email[0];
+      else if (err?.message && err.message !== `API Error ${err?.status}`) msg = err.message;
 
+      if (data?.email)    setErrors(e => ({...e, email:    Array.isArray(data.email)    ? data.email[0]    : data.email }));
+      if (data?.password) setErrors(e => ({...e, password: Array.isArray(data.password) ? data.password[0] : data.password }));
+
+      setErrors(e => ({...e, general: msg}));
       Alert.alert("Login Failed", msg);
       setPassword("");
     } finally {
@@ -80,59 +90,103 @@ export default function ProviderLoginScreen() {
     }
   };
 
+  const wrap = (field: string): any => ({
+    flexDirection:"row", alignItems:"center", backgroundColor:"#fff",
+    borderRadius:14, borderWidth:1.5, paddingHorizontal:14, height:52,
+    borderColor: (errors as any)[field] ? "#FCA5A5" : "#E2E8F0",
+  });
+
   return (
-    <ScreenWrapper>
-      <TouchableOpacity onPress={() => router.back()}
-        style={{ marginTop: 16, width: 44, height: 44, borderRadius: 14, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border }}
-      >
-        <ArrowLeft size={20} color={Colors.text.primary} />
-      </TouchableOpacity>
+    <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: "timing", duration: 600 }} style={{ paddingTop: 32, paddingBottom: 40 }}>
-        <View style={{ width: 64, height: 64, borderRadius: 20, backgroundColor: Colors.accent.light, alignItems: "center", justifyContent: "center", marginBottom: 24 }}>
-          <Text style={{ fontSize: 32 }}>🔧</Text>
-        </View>
-        <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize: Typography.sizes["3xl"], color: Colors.text.primary, marginBottom: 8 }}>
-          Provider Login
-        </Text>
-        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: Typography.sizes.base, color: Colors.text.secondary, lineHeight: 22 }}>
-          Sign in to your provider account
-        </Text>
-      </MotiView>
-
-      <MotiView from={{ opacity: 0, translateY: 30 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 200, type: "timing", duration: 600 }}>
-        <Input
-          label="Email" isRequired placeholder="you@example.com"
-          keyboardType="email-address" autoCapitalize="none"
-          value={email} error={errors.email}
-          onChangeText={(t) => { setEmail(t); setErrors((e) => ({ ...e, email: undefined })); }}
-          leftIcon={<Mail size={18} color={Colors.text.secondary} />}
-        />
-        <View style={{ marginTop: 12 }}>
-          <Input
-            label="Password" isRequired placeholder="••••••••" secureTextEntry
-            value={password} error={errors.password}
-            onChangeText={(t) => { setPassword(t); setErrors((e) => ({ ...e, password: undefined })); }}
-            leftIcon={<Lock size={18} color={Colors.text.secondary} />}
-          />
-        </View>
-        <View style={{ marginTop: 20 }}>
-          <Button label="Sign In" variant="secondary" size="lg" isLoading={isLoading} onPress={handleLogin} />
-        </View>
-      </MotiView>
-
-      <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 500, type: "timing", duration: 600 }}
-        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 32 }}
-      >
-        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: Typography.sizes.base, color: Colors.text.secondary }}>
-          New to SnapFix?{" "}
-        </Text>
-        <TouchableOpacity onPress={() => router.push("/(auth)/provider/register")}>
-          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: Typography.sizes.base, color: Colors.accent.DEFAULT }}>
-            Create Account
-          </Text>
+      <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:1}}
+        style={{ paddingTop: Platform.OS==="android"?48:60, paddingBottom:40, paddingHorizontal:24, overflow:"hidden" }}>
+        <View style={{ position:"absolute", top:-40, right:-40, width:180, height:180, borderRadius:90, backgroundColor:"rgba(6,182,212,0.07)" }} />
+        <TouchableOpacity onPress={() => router.replace("/(auth)/role-select " as any)}
+          style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center", marginBottom:28 }}>
+          <ArrowLeft size={20} color="#fff" />
         </TouchableOpacity>
-      </MotiView>
-    </ScreenWrapper>
+        <View >
+          <View style={{ width:60, height:60, borderRadius:20, backgroundColor:"rgba(6,182,212,0.2)", alignItems:"center", justifyContent:"center", marginBottom:18, borderWidth:1.5, borderColor:"rgba(6,182,212,0.3)" }}>
+            <Text style={{ fontSize:28 }}>🔧</Text>
+          </View>
+          <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize:28, color:"#fff", marginBottom:6 }}>Provider Login</Text>
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color:"rgba(255,255,255,0.5)", lineHeight:20 }}>
+            Sign in to manage your jobs and earnings
+          </Text>
+        </View>
+      </LinearGradient>
+
+      <View style={{ flex:1, paddingHorizontal:24, paddingTop:32 }}>
+
+        {errors.general && (
+          <View style={{ flexDirection:"row", alignItems:"center", gap:10, backgroundColor:"#FEF2F2", borderRadius:14, padding:14, marginBottom:20, borderWidth:1, borderColor:"#FECACA" }}>
+            <AlertCircle size={16} color="#EF4444" />
+            <Text style={{ flex:1, fontFamily: Typography.fonts.medium, fontSize:13, color:"#EF4444" }}>{errors.general}</Text>
+          </View>
+        )}
+
+        <View >
+
+          {/* Email */}
+          <View style={{ marginBottom:16 }}>
+            <Text style={{ fontFamily: Typography.fonts.medium, fontSize:13, color:"#64748B", marginBottom:8 }}>Email <Text style={{ color:"#EF4444" }}>*</Text></Text>
+            <View style={wrap("email")}>
+              <Mail size={18} color="#94A3B8" style={{ marginRight:10 }} />
+              <TextInput value={email} onChangeText={t => { setEmail(t); setErrors(e => ({...e, email:undefined, general:undefined})); }}
+                placeholder="provider@example.com" placeholderTextColor="#CBD5E1"
+                keyboardType="email-address" autoCapitalize="none"
+                style={{ flex:1, fontFamily: Typography.fonts.regular, fontSize:14, color:"#0F172A" }} />
+            </View>
+            {errors.email && <View style={{ flexDirection:"row", alignItems:"center", gap:5, marginTop:5 }}>
+              <AlertCircle size={12} color="#EF4444" /><Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#EF4444" }}>{errors.email}</Text>
+            </View>}
+          </View>
+
+          {/* Password */}
+          <View style={{ marginBottom:28 }}>
+            <Text style={{ fontFamily: Typography.fonts.medium, fontSize:13, color:"#64748B", marginBottom:8 }}>Password <Text style={{ color:"#EF4444" }}>*</Text></Text>
+            <View style={wrap("password")}>
+              <Lock size={18} color="#94A3B8" style={{ marginRight:10 }} />
+              <TextInput value={password} onChangeText={t => { setPassword(t); setErrors(e => ({...e, password:undefined, general:undefined})); }}
+                placeholder="••••••••" placeholderTextColor="#CBD5E1" secureTextEntry={!showPass}
+                style={{ flex:1, fontFamily: Typography.fonts.regular, fontSize:14, color:"#0F172A" }} />
+              <TouchableOpacity onPress={() => setShowPass(v => !v)}>
+                {showPass ? <EyeOff size={18} color="#94A3B8" /> : <Eye size={18} color="#94A3B8" />}
+              </TouchableOpacity>
+            </View>
+            {errors.password && <View style={{ flexDirection:"row", alignItems:"center", gap:5, marginTop:5 }}>
+              <AlertCircle size={12} color="#EF4444" /><Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#EF4444" }}>{errors.password}</Text>
+            </View>}
+          </View>
+
+          <TouchableOpacity onPress={handleLogin} disabled={loading} activeOpacity={0.85}
+            style={{ borderRadius:18, overflow:"hidden", opacity: loading?0.75:1 }}>
+            <LinearGradient colors={["#06B6D4","#0284C7"]} start={{x:0,y:0}} end={{x:1,y:0}}
+              style={{ height:54, alignItems:"center", justifyContent:"center" }}>
+              {loading ? <ActivityIndicator size="small" color="#fff" />
+                : <Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Sign In</Text>}
+            </LinearGradient>
+          </TouchableOpacity>
+
+          {/* Info box */}
+          <View style={{ backgroundColor:"#F0F9FF", borderRadius:14, padding:14, marginTop:20, flexDirection:"row", gap:8 }}>
+            <Text style={{ fontSize:14 }}>💡</Text>
+            <Text style={{ fontFamily: Typography.fonts.regular, fontSize:12, color:"#0369A1", flex:1, lineHeight:18 }}>
+              After registration, your account must be verified by admin before you can access the dashboard.
+            </Text>
+          </View>
+        </View>
+
+        <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"center", marginTop:28 }}>
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:15, color:"#64748B" }}>New to SnapFix?{" "}</Text>
+          <TouchableOpacity onPress={() => router.push("/(auth)/provider/register" as any)}>
+            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:15, color:"#06B6D4" }}>Create Account</Text>
+          </TouchableOpacity>
+        </View>
+
+      </View>
+    </View>
   );
 }

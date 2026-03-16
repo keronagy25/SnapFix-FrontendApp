@@ -1,82 +1,38 @@
 import { apiRequest } from "./api";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
+/* ─── Types ──────────────────────────────────────────────────────── */
 export interface Category {
-  id:          number;
-  name:        string;
-  slug:        string;
-  description: string;
-  icon:        string;
-}
-
-export interface CategoryPayload {
-  name:        string;
-  slug:        string;
-  description: string;
-  icon:        string;
+  id:   number;
+  name: string;
+  icon: string;   // icon key e.g. "wrench", "bolt"
 }
 
 export interface Region {
-  id:      number;
-  name:    string;
-  slug:    string;
-  code:    string;
-  country: string;
-  location?: {
-    type:        "Point";
-    coordinates: [number, number]; // [longitude, latitude]
-  };
+  id:   number;
+  name: string;
 }
 
-export interface RegionPayload {
-  name:      string;
-  slug:      string;
-  code:      string;
-  country:   string;
-  location?: {
-    type:        "Point";
-    coordinates: [number, number];
-  };
-}
-
-// Django REST Framework returns paginated lists by default
-interface PaginatedResponse<T> {
+interface Paginated<T> {
   count:    number;
   next:     string | null;
   previous: string | null;
   results:  T[];
 }
 
-// ─── Categories ───────────────────────────────────────────────────────────────
+/* ─── Endpoints ──────────────────────────────────────────────────── */
 
-export const getCategories = async (): Promise<Category[]> => {
-  const res = await apiRequest<PaginatedResponse<Category> | Category[]>(
-    "/core/categories/",
-    { method: "GET" }
+// GET /api/v1/core/categories/
+export const getCategories = async (token?: string): Promise<Category[]> => {
+  const res = await apiRequest<Paginated<Category> | Category[]>(
+    "/core/categories/", { method: "GET" }, token
   );
-  // Handle both paginated { results: [] } and plain array responses
-  return Array.isArray(res) ? res : res.results ?? [];
+  return Array.isArray(res) ? res : (res as Paginated<Category>).results ?? [];
 };
 
-export const createCategory = (payload: CategoryPayload) =>
-  apiRequest<Category>("/core/categories/", {
-    method: "POST",
-    body:   JSON.stringify(payload),
-  });
-
-// ─── Regions ─────────────────────────────────────────────────────────────────
-
-export const getRegions = async (): Promise<Region[]> => {
-  const res = await apiRequest<PaginatedResponse<Region> | Region[]>(
-    "/core/regions/",
-    { method: "GET" }
+// GET /api/v1/core/regions/
+export const getRegions = async (token?: string): Promise<Region[]> => {
+  const res = await apiRequest<Paginated<Region> | Region[]>(
+    "/core/regions/", { method: "GET" }, token
   );
-  return Array.isArray(res) ? res : res.results ?? [];
+  return Array.isArray(res) ? res : (res as Paginated<Region>).results ?? [];
 };
-
-export const createRegion = (payload: RegionPayload) =>
-  apiRequest<Region>("/core/regions/", {
-    method: "POST",
-    body:   JSON.stringify(payload),
-  });

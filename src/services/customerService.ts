@@ -1,10 +1,15 @@
 import { apiRequest } from "./api";
-import type { CustomerProfile } from "@/types";
 
-/**
- * GET /api/v1/customers/me/
- * Returns the authenticated customer's profile.
- * Requires a valid auth token.
- */
+export interface CustomerProfile {
+  id:             string;   // UUID string from API
+  email:          string;
+  first_name:     string;
+  last_name:      string;
+  phone:          string;
+  total_bookings: number;
+  role?:          string;
+}
+
+// GET /api/v1/customers/me/
 export const getCustomerProfile = (token: string) =>
-  apiRequest<CustomerProfile>("/customers/me/", {}, token);
+  apiRequest<CustomerProfile>("/customers/me/", { method: "GET" }, token);

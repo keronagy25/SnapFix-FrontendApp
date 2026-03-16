@@ -1,42 +1,52 @@
-// ─── Base API Client ────────────────────────────────────────────────────────
-// All API calls funnel through here. Token is pulled from the auth store.
-
-export const BASE_URL = "https://snap-fix-api-production.up.railway.app/api/v1";
+const BASE_URL = "https://snap-fix-api-production.up.railway.app/api/v1";
 
 export class ApiError extends Error {
   status: number;
-  data: any;
-
+  data:   any;
   constructor(status: number, data: any) {
-    super(data?.detail || data?.message || "Something went wrong");
+    super(`API Error ${status}`);
     this.status = status;
-    this.data = data;
+    this.data   = data;
   }
 }
 
 export async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {},
-  token?: string | null
+  options:  RequestInit = {},
+  token?:   string | null,
 ): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(token ? { Authorization: `Token ${token}` } : {}),
-    ...(options.headers as Record<string, string>),
+    "Accept":       "application/json",
+    ...(options.headers as Record<string, string> ?? {}),
   };
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
+  if (token) {
+    headers["Authorization"] = `Token ${token}`;
+  }
+
+  const url = `${BASE_URL}${endpoint}`;
+
+  console.log(`[API] ${options.method ?? "GET"} ${url}`);
+
+  const res = await fetch(url, {
     ...options,
     headers,
   });
 
-  // 204 No Content — return empty
-  if (response.status === 204) return {} as T;
+  // 204 No Content
+  if (res.status === 204) return {} as T;
 
-  const data = await response.json().catch(() => ({}));
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    data = {};
+  }
 
-  if (!response.ok) {
-    throw new ApiError(response.status, data);
+  if (!res.ok) {
+    console.log(`[API] Error ${res.status}:`, JSON.stringify(data));
+    throw new ApiError(res.status, data);
   }
 
   return data as T;

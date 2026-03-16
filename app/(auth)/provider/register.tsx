@@ -1,402 +1,185 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  TouchableOpacity,
-  Alert,
-  ScrollView,
-  Platform,
-  StatusBar,
-  ActivityIndicator,
+  View, Text, TouchableOpacity, Alert,
+  ActivityIndicator, TextInput, StatusBar, Platform, ScrollView,
 } from "react-native";
-import { router }       from "expo-router";
-import { MotiView }     from "moti";
+import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import {
-  User, Mail, Phone, Lock, ArrowLeft,
-  Eye, EyeOff, CheckCircle, AlertCircle,
-} from "lucide-react-native";
-import { useAuthStore }        from "@/store/authStore";
-import { Colors }              from "@/theme/colors";
-import { Typography }          from "@/theme/typography";
-import { providerRegister }    from "@/services/authService";
-import { Input }               from "@/components/ui/Input";
-import { Button }              from "@/components/ui/Button";
+import { User, Mail, Phone, Lock, ArrowLeft, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react-native";
+import { useAuthStore }     from "@/store/authStore";
+import { Typography }       from "@/theme/typography";
+import { providerRegister } from "@/services/authService";
 
-/* ══════════════════════════════════════════════════════════════════
-   TYPES
-══════════════════════════════════════════════════════════════════ */
-interface FormState {
-  first_name: string;
-  last_name:  string;
-  email:      string;
-  phone:      string;
-  password:   string;
-}
+interface Form { first_name:string; last_name:string; email:string; phone:string; password:string; }
 
-interface FormErrors {
-  first_name?: string;
-  last_name?:  string;
-  email?:      string;
-  phone?:      string;
-  password?:   string;
-}
-
-/* ══════════════════════════════════════════════════════════════════
-   FIELD ROW — shows inline error + success tick
-══════════════════════════════════════════════════════════════════ */
-function FieldStatus({ error, value }: { error?: string; value: string }) {
-  if (error) {
-    return (
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 }}>
+function FieldRow({ label, value, onChange, placeholder, icon: Icon, keyboard = "default",
+  capitalize = "none", secure = false, showToggle = false, onToggle, error, hint, maxLen }: {
+  label:string; value:string; onChange:(v:string)=>void; placeholder:string;
+  icon:any; keyboard?:any; capitalize?:any; secure?:boolean;
+  showToggle?:boolean; onToggle?:()=>void; error?:string; hint?:string; maxLen?:number;
+}) {
+  return (
+    <View style={{ marginBottom:16 }}>
+      <Text style={{ fontFamily: Typography.fonts.medium, fontSize:13, color:"#64748B", marginBottom:8 }}>
+        {label} <Text style={{ color:"#EF4444" }}>*</Text>
+      </Text>
+      <View style={{ flexDirection:"row", alignItems:"center", backgroundColor:"#fff", borderRadius:14, borderWidth:1.5, paddingHorizontal:14, height:52, borderColor: error ? "#FCA5A5" : "#E2E8F0" }}>
+        <Icon size={18} color="#94A3B8" style={{ marginRight:10 }} />
+        <TextInput value={value} onChangeText={onChange} placeholder={placeholder} placeholderTextColor="#CBD5E1"
+          keyboardType={keyboard} autoCapitalize={capitalize} secureTextEntry={secure}
+          maxLength={maxLen}
+          style={{ flex:1, fontFamily: Typography.fonts.regular, fontSize:14, color:"#0F172A" }} />
+        {showToggle && onToggle && (
+          <TouchableOpacity onPress={onToggle}>
+            {secure ? <Eye size={18} color="#94A3B8" /> : <EyeOff size={18} color="#94A3B8" />}
+          </TouchableOpacity>
+        )}
+      </View>
+      {error && <View style={{ flexDirection:"row", alignItems:"center", gap:5, marginTop:5 }}>
         <AlertCircle size={12} color="#EF4444" />
-        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#EF4444" }}>
-          {error}
-        </Text>
-      </View>
-    );
-  }
-  if (value.length > 0) {
-    return (
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 4 }}>
+        <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#EF4444" }}>{error}</Text>
+      </View>}
+      {!error && value.length > 0 && <View style={{ flexDirection:"row", alignItems:"center", gap:5, marginTop:5 }}>
         <CheckCircle size={12} color="#10B981" />
-        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#10B981" }}>
-          Looks good
-        </Text>
-      </View>
-    );
-  }
-  return null;
+        <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#10B981" }}>Looks good</Text>
+      </View>}
+      {hint && !error && value.length === 0 && (
+        <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#94A3B8", marginTop:4 }}>{hint}</Text>
+      )}
+    </View>
+  );
 }
 
-/* ══════════════════════════════════════════════════════════════════
-   MAIN SCREEN
-══════════════════════════════════════════════════════════════════ */
 export default function ProviderRegisterScreen() {
-  const [form, setForm] = useState<FormState>({
-    first_name: "",
-    last_name:  "",
-    email:      "",
-    phone:      "",
-    password:   "",
-  });
-  const [errors,       setErrors]       = useState<FormErrors>({});
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLoading,    setIsLoading]    = useState(false);
-  const [apiError,     setApiError]     = useState<string | null>(null);
+  const [form,      setForm]      = useState<Form>({ first_name:"", last_name:"", email:"", phone:"", password:"" });
+  const [errors,    setErrors]    = useState<Partial<Form> & { general?:string }>({});
+  const [showPass,  setShowPass]  = useState(false);
+  const [loading,   setLoading]   = useState(false);
 
   const setToken = useAuthStore((s) => s.setToken);
   const setUser  = useAuthStore((s) => s.setUser);
+  const setRole  = useAuthStore((s) => s.setRole);
 
-  /* ── field updater ── */
-  const update = (field: keyof FormState) => (value: string) => {
-    setForm((f) => ({ ...f, [field]: value }));
-    setErrors((e) => ({ ...e, [field]: undefined }));
-    setApiError(null);
+  const set = (field: keyof Form) => (val: string) => {
+    setForm(f => ({ ...f, [field]: val }));
+    setErrors(e => ({ ...e, [field]: undefined, general: undefined }));
   };
 
-  /* ── client-side validation ── */
-  const validate = (): boolean => {
-    const e: FormErrors = {};
-
-    if (!form.first_name.trim() || form.first_name.trim().length < 2)
-      e.first_name = "At least 2 characters required";
-    if (!form.last_name.trim() || form.last_name.trim().length < 2)
-      e.last_name = "At least 2 characters required";
-    if (!/\S+@\S+\.\S+/.test(form.email.trim()))
-      e.email = "Enter a valid email address";
-    if (!/^01[0-9]{9}$/.test(form.phone.trim()))
-      e.phone = "Must be 11 digits starting with 01";
-    if (form.password.length < 6)
-      e.password = "Minimum 6 characters";
-
+  const validate = () => {
+    const e: typeof errors = {};
+    if (form.first_name.trim().length < 2)   e.first_name = "At least 2 characters";
+    if (form.last_name.trim().length  < 2)   e.last_name  = "At least 2 characters";
+    if (!/\S+@\S+\.\S+/.test(form.email))    e.email      = "Enter a valid email address";
+    if (!/^01[0-9]{9}$/.test(form.phone))    e.phone      = "Must be 11 digits starting with 01";
+    if (form.password.length < 6)            e.password   = "Minimum 6 characters";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
 
-  /* ── map API field errors back onto the form ── */
-  const applyApiErrors = (data: any): boolean => {
-    const e: FormErrors = {};
-    let hasFieldError = false;
-
-    const pick = (val: any) =>
-      Array.isArray(val) ? val[0] : String(val);
-
-    if (data?.first_name) { e.first_name = pick(data.first_name); hasFieldError = true; }
-    if (data?.last_name)  { e.last_name  = pick(data.last_name);  hasFieldError = true; }
-    if (data?.email)      { e.email      = pick(data.email);      hasFieldError = true; }
-    if (data?.phone)      { e.phone      = pick(data.phone);      hasFieldError = true; }
-    if (data?.password)   { e.password   = pick(data.password);   hasFieldError = true; }
-
-    if (hasFieldError) {
-      setErrors(e);
-      return true;
-    }
-    return false;
-  };
-
-  /* ── submit → POST /api/v1/providers/register/ ── */
   const handleRegister = async () => {
     if (!validate()) return;
-
-    setIsLoading(true);
-    setApiError(null);
+    setLoading(true);
+    setErrors({});
 
     try {
-      const payload = {
+      const res = await providerRegister({
         first_name: form.first_name.trim(),
         last_name:  form.last_name.trim(),
         email:      form.email.trim().toLowerCase(),
         phone:      form.phone.trim(),
         password:   form.password,
-      };
-
-      const { token, user } = await providerRegister(payload);
-
-      // Store token + user
-      setToken(token);
-      setUser({
-        ...(user ?? {}),
-        first_name: payload.first_name,
-        last_name:  payload.last_name,
-        email:      payload.email,
-        phone:      payload.phone,
-        role:       "provider",
       });
 
-      // Navigate to pending/verification screen
-      router.replace("/(auth)/provider/pending");
+      setToken(res.token);
+      setRole("provider");
+      setUser({ id: res.id ?? "", first_name: form.first_name.trim(), last_name: form.last_name.trim(),
+        email: form.email.trim(), phone: form.phone.trim(), role: "provider", verification_status: "pending" } as any);
+
+      router.replace("/(auth)/provider/pending" as any);
 
     } catch (err: any) {
-      const data = err?.data ?? err?.response?.data;
+      console.log("[ProviderRegister] ERROR:", JSON.stringify(err?.data ?? err?.message ?? err));
+      const data = err?.data ?? {};
 
-      // Try to put errors on specific fields first
-      if (data && applyApiErrors(data)) {
-        // field errors shown inline — no alert needed
+      const newErrors: typeof errors = {};
+      if (data?.first_name) newErrors.first_name = Array.isArray(data.first_name) ? data.first_name[0] : data.first_name;
+      if (data?.last_name)  newErrors.last_name  = Array.isArray(data.last_name)  ? data.last_name[0]  : data.last_name;
+      if (data?.email)      newErrors.email      = Array.isArray(data.email)      ? data.email[0]      : data.email;
+      if (data?.phone)      newErrors.phone      = Array.isArray(data.phone)      ? data.phone[0]      : data.phone;
+      if (data?.password)   newErrors.password   = Array.isArray(data.password)   ? data.password[0]   : data.password;
+
+      if (!Object.keys(newErrors).length) {
+        const msg = data?.non_field_errors?.[0] ?? data?.detail ?? err?.message ?? "Registration failed. Please try again.";
+        newErrors.general = msg;
+        Alert.alert("Registration Failed", msg);
       } else {
-        // Fall back to a banner message
-        let msg = "Registration failed. Please try again.";
-        if (data?.non_field_errors?.[0])  msg = data.non_field_errors[0];
-        else if (data?.detail)            msg = data.detail;
-        else if (err?.message)            msg = err.message;
-        setApiError(msg);
+        Alert.alert("Registration Failed", "Please fix the highlighted fields.");
       }
+
+      setErrors(newErrors);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  /* ══════════════════════════════════════════════════════════════
-     RENDER
-  ══════════════════════════════════════════════════════════════ */
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+    <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
+      <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      {/* ── Gradient Header ── */}
-      <LinearGradient
-        colors={["#1E3A8A", "#2563EB"]}
-        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-        style={{
-          paddingTop:    Platform.OS === "android" ? 48 : 60,
-          paddingBottom: 32,
-          paddingHorizontal: 20,
-          overflow: "hidden",
-        }}
-      >
-        {/* decorative circles */}
-        <View style={{ position: "absolute", top: -40, right: -40, width: 180, height: 180, borderRadius: 90, backgroundColor: "rgba(255,255,255,0.05)" }} />
-        <View style={{ position: "absolute", bottom: -20, left: -20, width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(6,182,212,0.1)" }} />
-
-        <TouchableOpacity
-          onPress={() => router.back()}
-          style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center", marginBottom: 24 }}
-        >
+      <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:1}}
+        style={{ paddingTop: Platform.OS==="android"?48:60, paddingBottom:32, paddingHorizontal:24, overflow:"hidden" }}>
+        <View style={{ position:"absolute", top:-40, right:-40, width:180, height:180, borderRadius:90, backgroundColor:"rgba(6,182,212,0.07)" }} />
+        <TouchableOpacity onPress={() => router.back()}
+          style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center", marginBottom:24 }}>
           <ArrowLeft size={20} color="#fff" />
         </TouchableOpacity>
-
-        <MotiView
-          from={{ opacity: 0, translateY: 16 }}
-          animate={{ opacity: 1, translateY: 0 }}
-          transition={{ type: "timing", duration: 500 }}
-        >
-          <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 13, color: "rgba(255,255,255,0.6)", marginBottom: 4, letterSpacing: 0.6 }}>
-            PROVIDER REGISTRATION
+        <View >
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"rgba(255,255,255,0.5)", marginBottom:4, letterSpacing:0.6 }}>PROVIDER REGISTRATION</Text>
+          <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize:28, color:"#fff", lineHeight:34 }}>
+            Join as a{"\n"}<Text style={{ color:"#06B6D4" }}>Professional</Text>
           </Text>
-          <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize: 28, color: "#fff", lineHeight: 34 }}>
-            Join as a{"\n"}
-            <Text style={{ color: "#06B6D4" }}>Professional</Text>
-          </Text>
-          <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 13, color: "rgba(255,255,255,0.6)", marginTop: 8 }}>
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"rgba(255,255,255,0.5)", marginTop:8 }}>
             Create your account and start receiving jobs
           </Text>
-        </MotiView>
+        </View>
       </LinearGradient>
 
-      {/* ── Form ── */}
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" contentContainerStyle={{ padding:24, paddingBottom:60 }}>
 
-        {/* API error banner */}
-        {apiError && (
-          <MotiView
-            from={{ opacity: 0, translateY: -8 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            style={{
-              flexDirection: "row", alignItems: "flex-start", gap: 10,
-              backgroundColor: "#FEF2F2", borderRadius: 14, padding: 14,
-              marginBottom: 20, borderWidth: 1, borderColor: "#FECACA",
-            }}
-          >
-            <AlertCircle size={18} color="#EF4444" style={{ marginTop: 1 }} />
-            <Text style={{ flex: 1, fontFamily: Typography.fonts.medium, fontSize: 13, color: "#EF4444", lineHeight: 20 }}>
-              {apiError}
-            </Text>
-          </MotiView>
+        {/* General error banner */}
+        {errors.general && (
+          <View style={{ flexDirection:"row", alignItems:"center", gap:10, backgroundColor:"#FEF2F2", borderRadius:14, padding:14, marginBottom:20, borderWidth:1, borderColor:"#FECACA" }}>
+            <AlertCircle size={16} color="#EF4444" />
+            <Text style={{ flex:1, fontFamily: Typography.fonts.medium, fontSize:13, color:"#EF4444" }}>{errors.general}</Text>
+          </View>
         )}
 
-        {/* First Name */}
-        <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 100, type: "timing", duration: 400 }}>
-          <Text style={labelStyle}>First Name <Text style={{ color: "#EF4444" }}>*</Text></Text>
-          <Input
-            placeholder="e.g. Shady"
-            value={form.first_name}
-            onChangeText={update("first_name")}
-            autoCapitalize="words"
-            returnKeyType="next"
-            leftIcon={<User size={18} color={Colors.text.secondary} />}
-            error={errors.first_name}
-          />
-          <FieldStatus error={errors.first_name} value={form.first_name} />
-        </MotiView>
+        <FieldRow label="First Name"    value={form.first_name} onChange={set("first_name")} placeholder="e.g. Shady"          icon={User}  capitalize="words"  error={errors.first_name} />
+        <FieldRow label="Last Name"     value={form.last_name}  onChange={set("last_name")}  placeholder="e.g. Abadeer"        icon={User}  capitalize="words"  error={errors.last_name}  />
+        <FieldRow label="Email Address" value={form.email}      onChange={set("email")}      placeholder="provider@example.com" icon={Mail}  keyboard="email-address" error={errors.email} />
+        <FieldRow label="Phone Number"  value={form.phone}      onChange={set("phone")}      placeholder="01xxxxxxxxx"          icon={Phone} keyboard="phone-pad"    error={errors.phone} hint="11 digits starting with 01" maxLen={11} />
+        <FieldRow label="Password"      value={form.password}   onChange={set("password")}   placeholder="Minimum 6 characters" icon={Lock}  secure={!showPass}     error={errors.password}
+          showToggle onToggle={() => setShowPass(v => !v)} hint="At least 6 characters" />
 
-        {/* Last Name */}
-        <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 150, type: "timing", duration: 400 }} style={{ marginTop: 14 }}>
-          <Text style={labelStyle}>Last Name <Text style={{ color: "#EF4444" }}>*</Text></Text>
-          <Input
-            placeholder="e.g. Abadeer"
-            value={form.last_name}
-            onChangeText={update("last_name")}
-            autoCapitalize="words"
-            returnKeyType="next"
-            leftIcon={<User size={18} color={Colors.text.secondary} />}
-            error={errors.last_name}
-          />
-          <FieldStatus error={errors.last_name} value={form.last_name} />
-        </MotiView>
+        <View style={{ height:1, backgroundColor:"#F1F5F9", marginVertical:24 }} />
 
-        {/* Email */}
-        <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 200, type: "timing", duration: 400 }} style={{ marginTop: 14 }}>
-          <Text style={labelStyle}>Email Address <Text style={{ color: "#EF4444" }}>*</Text></Text>
-          <Input
-            placeholder="provider@example.com"
-            value={form.email}
-            onChangeText={update("email")}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="next"
-            leftIcon={<Mail size={18} color={Colors.text.secondary} />}
-            error={errors.email}
-          />
-          <FieldStatus error={errors.email} value={form.email} />
-        </MotiView>
+        <TouchableOpacity onPress={handleRegister} disabled={loading} activeOpacity={0.85}
+          style={{ borderRadius:18, overflow:"hidden", opacity: loading?0.75:1 }}>
+          <LinearGradient colors={["#06B6D4","#0284C7"]} start={{x:0,y:0}} end={{x:1,y:0}}
+            style={{ height:54, alignItems:"center", justifyContent:"center" }}>
+            {loading ? <ActivityIndicator size="small" color="#fff" />
+              : <Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Create Account</Text>}
+          </LinearGradient>
+        </TouchableOpacity>
 
-        {/* Phone */}
-        <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 250, type: "timing", duration: 400 }} style={{ marginTop: 14 }}>
-          <Text style={labelStyle}>Phone Number <Text style={{ color: "#EF4444" }}>*</Text></Text>
-          <Input
-            placeholder="01xxxxxxxxx"
-            value={form.phone}
-            onChangeText={update("phone")}
-            keyboardType="phone-pad"
-            maxLength={11}
-            returnKeyType="next"
-            leftIcon={<Phone size={18} color={Colors.text.secondary} />}
-            error={errors.phone}
-          />
-          <FieldStatus error={errors.phone} value={form.phone} />
-          <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: Colors.text.secondary, marginTop: 3 }}>
-            Egyptian numbers only — 11 digits starting with 01
-          </Text>
-        </MotiView>
-
-        {/* Password */}
-        <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 300, type: "timing", duration: 400 }} style={{ marginTop: 14 }}>
-          <Text style={labelStyle}>Password <Text style={{ color: "#EF4444" }}>*</Text></Text>
-          <Input
-            placeholder="••••••••"
-            value={form.password}
-            onChangeText={update("password")}
-            secureTextEntry={!showPassword}
-            returnKeyType="done"
-            onSubmitEditing={handleRegister}
-            leftIcon={<Lock size={18} color={Colors.text.secondary} />}
-            error={errors.password}
-            rightIcon={
-              <TouchableOpacity onPress={() => setShowPassword((p) => !p)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                {showPassword
-                  ? <EyeOff size={18} color={Colors.text.secondary} />
-                  : <Eye    size={18} color={Colors.text.secondary} />}
-              </TouchableOpacity>
-            }
-          />
-          <FieldStatus error={errors.password} value={form.password} />
-        </MotiView>
-
-        {/* Divider */}
-        <View style={{ height: 1, backgroundColor: "#F1F5F9", marginVertical: 28 }} />
-
-        {/* Submit */}
-        <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 400, type: "timing", duration: 400 }}>
-          <TouchableOpacity
-            onPress={handleRegister}
-            disabled={isLoading}
-            activeOpacity={0.88}
-            style={{ borderRadius: 18, overflow: "hidden", opacity: isLoading ? 0.75 : 1 }}
-          >
-            <LinearGradient
-              colors={["#06B6D4", "#0284C7"]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={{ paddingVertical: 16, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 10 }}
-            >
-              {isLoading
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 16, color: "#fff" }}>Create Account</Text>
-              }
-            </LinearGradient>
+        <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"center", marginTop:20 }}>
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color:"#64748B" }}>Already have an account?{" "}</Text>
+          <TouchableOpacity onPress={() => router.push("/(auth)/provider/login" as any)}>
+            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:14, color:"#06B6D4" }}>Sign In</Text>
           </TouchableOpacity>
-        </MotiView>
-
-        {/* Login link */}
-        <MotiView
-          from={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 500, type: "timing", duration: 400 }}
-          style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: 20 }}
-        >
-          <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 14, color: Colors.text.secondary }}>
-            Already have an account?{" "}
-          </Text>
-          <TouchableOpacity onPress={() => router.push("/(auth)/login")}>
-            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 14, color: "#06B6D4" }}>
-              Sign In
-            </Text>
-          </TouchableOpacity>
-        </MotiView>
+        </View>
 
       </ScrollView>
     </View>
   );
 }
-
-/* ── shared label style ── */
-const labelStyle = {
-  fontFamily:   Typography.fonts.medium,
-  fontSize:     13,
-  color:        "#475569",
-  marginBottom: 6,
-} as const;

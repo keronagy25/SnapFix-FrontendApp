@@ -1,105 +1,78 @@
-import React, { useState } from "react";
-import { View, Text, TouchableOpacity, Dimensions } from "react-native";
-import { router }        from "expo-router";
-import { MotiView }      from "moti";
-import { CheckCircle }   from "lucide-react-native";
-import { ScreenWrapper } from "@/components/shared/ScreenWrapper";
-import { Button }        from "@/components/ui/Button";
-import { useAuthStore }  from "@/store/authStore";
-import { Colors }        from "@/theme/colors";
-import { Typography }    from "@/theme/typography";
-import { Shadows }       from "@/theme/shadows";
-import type { UserRole } from "@/types";
+import React from "react";
+import { View, Text, TouchableOpacity, StatusBar, Platform, Dimensions } from "react-native";
+import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { Colors }    from "@/theme/colors";
+import { Typography }from "@/theme/typography";
 
 const { width } = Dimensions.get("window");
 
-interface RoleCardProps {
-  title: string; subtitle: string; description: string;
-  emoji: string; role: UserRole; isSelected: boolean;
-  onSelect: () => void; features: string[]; delay: number;
-}
-
-const RoleCard: React.FC<RoleCardProps> = ({
-  title, subtitle, description, emoji, role, isSelected, onSelect, features, delay,
-}) => {
-  const isCustomer = role === "customer";
-  return (
-    <MotiView from={{ opacity: 0, translateY: 40 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: "spring", damping: 15, delay }}>
-      <TouchableOpacity onPress={onSelect} activeOpacity={0.9}
-        style={{ borderRadius: 24, borderWidth: 2, borderColor: isSelected ? (isCustomer ? Colors.primary.DEFAULT : Colors.accent.DEFAULT) : Colors.border, backgroundColor: isSelected ? (isCustomer ? Colors.primary[50] : Colors.accent.light) : Colors.surface, padding: 24, marginBottom: 16, ...Shadows.md }}
-      >
-        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: isCustomer ? Colors.primary[100] : Colors.accent.light, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 28 }}>{emoji}</Text>
-            </View>
-            <View>
-              <Text style={{ fontFamily: Typography.fonts.bold, fontSize: Typography.sizes.lg, color: Colors.text.primary }}>{title}</Text>
-              <Text style={{ fontFamily: Typography.fonts.regular, fontSize: Typography.sizes.xs, color: isCustomer ? Colors.primary.DEFAULT : Colors.accent.DEFAULT }}>{subtitle}</Text>
-            </View>
-          </View>
-          <View style={{ width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: isSelected ? (isCustomer ? Colors.primary.DEFAULT : Colors.accent.DEFAULT) : Colors.border, alignItems: "center", justifyContent: "center", backgroundColor: isSelected ? (isCustomer ? Colors.primary.DEFAULT : Colors.accent.DEFAULT) : "transparent" }}>
-            {isSelected && <CheckCircle size={16} color={Colors.text.inverse} fill={Colors.text.inverse} />}
-          </View>
-        </View>
-        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: Typography.sizes.sm, color: Colors.text.secondary, marginTop: 12, lineHeight: 20 }}>{description}</Text>
-        {isSelected && (
-          <MotiView from={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ type: "timing", duration: 300 }} style={{ marginTop: 16 }}>
-            {features.map((f, i) => (
-              <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isCustomer ? Colors.primary.DEFAULT : Colors.accent.DEFAULT }} />
-                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: Typography.sizes.sm, color: Colors.text.secondary }}>{f}</Text>
-              </View>
-            ))}
-          </MotiView>
-        )}
-      </TouchableOpacity>
-    </MotiView>
-  );
-};
-
 export default function RoleSelectScreen() {
-  const [selectedRole, setSelectedRole] = useState<UserRole | null>(null);
-  const setRole = useAuthStore((s) => s.setRole);
-
-  const handleContinue = () => {
-    if (!selectedRole) return;
-    setRole(selectedRole);
-    // ── Navigate to the dedicated login page for each role ──
-    if (selectedRole === "customer") {
-      router.push("/(auth)/customer/login");
-    } else {
-      router.push("/(auth)/provider/login");
-    }
-  };
-
   return (
-    <ScreenWrapper scrollable>
-      <MotiView from={{ opacity: 0, translateY: -20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ type: "timing", duration: 600 }} style={{ paddingTop: 32, paddingBottom: 32 }}>
-        <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize: Typography.sizes["3xl"], color: Colors.text.primary, marginBottom: 8 }}>
-          How will you use{"\n"}<Text style={{ color: Colors.primary.DEFAULT }}>SnapFix?</Text>
-        </Text>
-        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: Typography.sizes.base, color: Colors.text.secondary, lineHeight: 22 }}>
-          Choose your role to get a personalized experience.
-        </Text>
-      </MotiView>
+    <View style={{ flex:1, backgroundColor: Colors.background }}>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.primary.DEFAULT} />
 
-      <RoleCard role="customer" title="I'm a Customer" subtitle="Book home services"
-        description="Find trusted professionals for plumbing, electrical, AC repair, cleaning, and more — right at your doorstep."
-        emoji="🏠" isSelected={selectedRole === "customer"} onSelect={() => setSelectedRole("customer")}
-        features={["Browse 50+ service categories","Book same-day appointments","Live GPS tracking","Secure EGP payments"]}
-        delay={200}
-      />
-      <RoleCard role="provider" title="I'm a Provider" subtitle="Offer your expertise"
-        description="Join our network of verified professionals. Set your schedule, receive job requests, and grow your income."
-        emoji="🔧" isSelected={selectedRole === "provider"} onSelect={() => setSelectedRole("provider")}
-        features={["Receive real-time job requests","Set your own working hours","Fast EGP withdrawals","Build your reputation"]}
-        delay={350}
-      />
+      <LinearGradient colors={[Colors.primary.DEFAULT, "#2563EB"]} start={{x:0,y:0}} end={{x:1,y:1}}
+        style={{ paddingTop: Platform.OS==="android"?60:80, paddingBottom:48, paddingHorizontal:28, alignItems:"center" }}>
+        <View style={{ width:72, height:72, borderRadius:22, backgroundColor:"rgba(255,255,255,0.15)", alignItems:"center", justifyContent:"center", marginBottom:20, borderWidth:1.5, borderColor:"rgba(255,255,255,0.25)" }}>
+          <Text style={{ fontSize:36 }}>⚡</Text>
+        </View>
+        <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize:30, color:"#fff", letterSpacing:0.5 }}>
+          Snap<Text style={{ color:"#06B6D4" }}>Fix</Text>
+        </Text>
+        <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color:"rgba(255,255,255,0.65)", marginTop:8, textAlign:"center" }}>
+          How will you use SnapFix?
+        </Text>
+      </LinearGradient>
 
-      <MotiView from={{ opacity: 0, translateY: 20 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 500, type: "timing", duration: 500 }} style={{ marginTop: 8, marginBottom: 32 }}>
-        <Button label="Continue" variant="primary" size="lg" disabled={!selectedRole} onPress={handleContinue} />
-      </MotiView>
-    </ScreenWrapper>
+      <View style={{ flex:1, paddingHorizontal:24, paddingTop:32, gap:16 }}>
+
+        {/* Customer card */}
+        <TouchableOpacity onPress={() => router.push("/(auth)/customer/login" as any)} activeOpacity={0.88}>
+          <View style={{ backgroundColor:"#fff", borderRadius:22, padding:22, borderWidth:1.5, borderColor:"#E0ECFF", flexDirection:"row", alignItems:"center", gap:16, shadowColor:Colors.primary.DEFAULT, shadowOffset:{width:0,height:4}, shadowOpacity:0.1, shadowRadius:12, elevation:4 }}>
+            <View style={{ width:56, height:56, borderRadius:18, backgroundColor:Colors.primary[50], alignItems:"center", justifyContent:"center" }}>
+              <Text style={{ fontSize:28 }}>🏠</Text>
+            </View>
+            <View style={{ flex:1 }}>
+              <Text style={{ fontFamily: Typography.fonts.bold, fontSize:17, color: Colors.text.primary, marginBottom:4 }}>I'm a Customer</Text>
+              <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color: Colors.text.secondary, lineHeight:18 }}>Book home services and track providers in real-time</Text>
+            </View>
+            <View style={{ width:32, height:32, borderRadius:10, backgroundColor:Colors.primary[50], alignItems:"center", justifyContent:"center" }}>
+              <Text style={{ fontSize:16 }}>→</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {/* Provider card */}
+        <TouchableOpacity onPress={() => router.push("/(auth)/provider/login" as any)} activeOpacity={0.88}>
+          <View style={{ backgroundColor:"#0F172A", borderRadius:22, padding:22, flexDirection:"row", alignItems:"center", gap:16, shadowColor:"#0F172A", shadowOffset:{width:0,height:4}, shadowOpacity:0.2, shadowRadius:12, elevation:4 }}>
+            <View style={{ width:56, height:56, borderRadius:18, backgroundColor:"rgba(6,182,212,0.2)", alignItems:"center", justifyContent:"center" }}>
+              <Text style={{ fontSize:28 }}>🔧</Text>
+            </View>
+            <View style={{ flex:1 }}>
+              <Text style={{ fontFamily: Typography.fonts.bold, fontSize:17, color:"#fff", marginBottom:4 }}>I'm a Provider</Text>
+              <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"rgba(255,255,255,0.55)", lineHeight:18 }}>Offer your skills and earn money from home service jobs</Text>
+            </View>
+            <View style={{ width:32, height:32, borderRadius:10, backgroundColor:"rgba(6,182,212,0.2)", alignItems:"center", justifyContent:"center" }}>
+              <Text style={{ fontSize:16, color:"#06B6D4" }}>→</Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+
+        {/* Register links */}
+        <View style={{ alignItems:"center", marginTop:8, gap:12 }}>
+          <TouchableOpacity onPress={() => router.push("/(auth)/customer/register-step1" as any)}>
+            <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color: Colors.text.secondary }}>
+              New customer?{" "}<Text style={{ fontFamily: Typography.fonts.semibold, color: Colors.primary.DEFAULT }}>Create account</Text>
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push("/(auth)/provider/register" as any)}>
+            <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color: Colors.text.secondary }}>
+              New provider?{" "}<Text style={{ fontFamily: Typography.fonts.semibold, color:"#06B6D4" }}>Join as professional</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 }

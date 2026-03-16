@@ -1,10 +1,20 @@
 import { apiRequest } from "./api";
 
-// ─── Types ───────────────────────────────────────────────────────────────────
-
-export interface LoginPayload {
-  email:    string;
-  password: string;
+/* ─── Types ──────────────────────────────────────────────────────── */
+export interface AuthResponse {
+  token:  string;
+  expiry?: string;
+  user?: {
+    id:         string;
+    email:      string;
+    first_name?: string;
+  };
+  // register also returns these at top level
+  id?:         string;
+  email?:      string;
+  first_name?: string;
+  last_name?:  string;
+  phone?:      string;
 }
 
 export interface CustomerRegisterPayload {
@@ -23,12 +33,17 @@ export interface ProviderRegisterPayload {
   password:   string;
 }
 
-export interface AuthResponse {
-  token: string;
-  user?: any;
+export interface LoginPayload {
+  email:    string;
+  password: string;
 }
 
-// ─── Customer Auth ────────────────────────────────────────────────────────────
+/* ─── Customer Auth ──────────────────────────────────────────────── */
+export const customerRegister = (payload: CustomerRegisterPayload) =>
+  apiRequest<AuthResponse>("/customers/register/", {
+    method: "POST",
+    body:   JSON.stringify(payload),
+  });
 
 export const customerLogin = (payload: LoginPayload) =>
   apiRequest<AuthResponse>("/customers/login/", {
@@ -36,13 +51,17 @@ export const customerLogin = (payload: LoginPayload) =>
     body:   JSON.stringify(payload),
   });
 
-export const customerRegister = (payload: CustomerRegisterPayload) =>
-  apiRequest<AuthResponse>("/customers/register/", {
+export const customerLogout = (token: string) =>
+  apiRequest<void>("/customers/logout/", {
+    method: "POST",
+  }, token);
+
+/* ─── Provider Auth ──────────────────────────────────────────────── */
+export const providerRegister = (payload: ProviderRegisterPayload) =>
+  apiRequest<AuthResponse>("/providers/register/", {
     method: "POST",
     body:   JSON.stringify(payload),
   });
-
-// ─── Provider Auth ────────────────────────────────────────────────────────────
 
 export const providerLogin = (payload: LoginPayload) =>
   apiRequest<AuthResponse>("/providers/login/", {
@@ -50,8 +69,7 @@ export const providerLogin = (payload: LoginPayload) =>
     body:   JSON.stringify(payload),
   });
 
-export const providerRegister = (payload: ProviderRegisterPayload) =>
-  apiRequest<AuthResponse>("/providers/register/", {
+export const providerLogout = (token: string) =>
+  apiRequest<void>("/providers/logout/", {
     method: "POST",
-    body:   JSON.stringify(payload),
-  });
+  }, token);

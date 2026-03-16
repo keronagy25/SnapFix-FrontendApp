@@ -5,7 +5,6 @@ import {
   Alert, TextInput, RefreshControl,
 } from "react-native";
 import { router }         from "expo-router";
-import { MotiView }       from "moti";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, User, Mail, Phone, Star,
@@ -92,9 +91,9 @@ function VerificationBadge({ status }: { status: string }) {
   );
 }
 
-function EditField({ label, value, onChange, multiline = false, keyboardType = "default" }: {
+function EditField({ label, value, onChange, multiline = false, keyboardType = "default", error }: {
   label: string; value: string; onChange: (v: string) => void;
-  multiline?: boolean; keyboardType?: any;
+  multiline?: boolean; keyboardType?: any; error?: string;
 }) {
   return (
     <View style={{ marginBottom: 14 }}>
@@ -105,11 +104,16 @@ function EditField({ label, value, onChange, multiline = false, keyboardType = "
         keyboardType={keyboardType}
         style={{
           fontFamily: Typography.fonts.regular, fontSize: 14, color: "#0F172A",
-          backgroundColor: "#F8FAFC", borderRadius: 12, borderWidth: 1.5, borderColor: "#E2E8F0",
+          backgroundColor: error ? "#FEF2F2" : "#F8FAFC",
+          borderRadius: 12, borderWidth: 1.5,
+          borderColor: error ? "#FCA5A5" : "#E2E8F0",
           paddingHorizontal: 14, paddingVertical: multiline ? 10 : 0,
           height: multiline ? 80 : 48, textAlignVertical: multiline ? "top" : "center",
         }}
       />
+      {error && (
+        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#EF4444", marginTop: 4 }}>⚠ {error}</Text>
+      )}
     </View>
   );
 }
@@ -127,6 +131,7 @@ export default function ProviderProfileScreen() {
   const [error,      setError]      = useState<string | null>(null);
   const [editOpen,   setEditOpen]   = useState(false);
   const [saving,     setSaving]     = useState(false);
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
 
   const [editForm, setEditForm] = useState({
     first_name:          "",
@@ -170,6 +175,7 @@ export default function ProviderProfileScreen() {
       hourly_rate:         profile?.hourly_rate         ?? "",
       years_of_experience: String(profile?.years_of_experience ?? ""),
     });
+    setEditErrors({});
     setEditOpen(true);
   };
 
@@ -177,6 +183,7 @@ export default function ProviderProfileScreen() {
   const handleSave = async () => {
     if (!token) return;
     setSaving(true);
+    setEditErrors({});
     try {
       const updated = await updateProviderProfile(
         {
@@ -196,10 +203,24 @@ export default function ProviderProfileScreen() {
       setProfile(updated);
       setUser({ ...updated, role: "provider" } as any);
       setEditOpen(false);
+      Alert.alert("✓ Saved", "Your profile has been updated successfully.");
     } catch (err: any) {
-      const d   = err?.data ?? {};
-      const msg = d.phone?.[0] ?? d.hourly_rate?.[0] ?? d.detail ?? err?.message ?? "Failed to save.";
-      Alert.alert("Save Failed", msg);
+      console.log("[ProfileSave]", JSON.stringify(err?.data ?? err));
+      const d = err?.data ?? {};
+      // map field errors inline
+      const inline: Record<string, string> = {};
+      const fields = ["first_name","last_name","phone","bio","address","business_name","hourly_rate","years_of_experience"];
+      let hasField = false;
+      for (const f of fields) {
+        if (d[f]) { inline[f] = Array.isArray(d[f]) ? d[f][0] : d[f]; hasField = true; }
+      }
+      if (hasField) {
+        setEditErrors(inline);
+        Alert.alert("Fix Errors", "Please fix the highlighted fields.");
+      } else {
+        const msg = d?.detail ?? d?.non_field_errors?.[0] ?? err?.message ?? "Failed to save profile.";
+        Alert.alert("Save Failed", msg);
+      }
     } finally {
       setSaving(false);
     }
@@ -270,7 +291,7 @@ export default function ProviderProfileScreen() {
           </View>
 
           {/* Avatar + identity */}
-          <MotiView from={{ opacity: 0, scale: 0.85 }} animate={{ opacity: 1, scale: 1 }} transition={{ type: "spring", damping: 14 }} style={{ alignItems: "center" }}>
+          <View style={{ alignItems: "center" }}>
             <View style={{ width: 88, height: 88, borderRadius: 28, backgroundColor: "rgba(6,182,212,0.2)", alignItems: "center", justifyContent: "center", marginBottom: 16, borderWidth: 2.5, borderColor: "rgba(6,182,212,0.4)" }}>
               <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize: 32, color: "#06B6D4" }}>{initials}</Text>
             </View>
@@ -287,71 +308,69 @@ export default function ProviderProfileScreen() {
                 {profile?.is_available ? "Available for jobs" : "Not available"}
               </Text>
             </View>
-          </MotiView>
+          </View>
         </LinearGradient>
 
         <View style={{ paddingHorizontal: 20 }}>
 
           {/* ══ STATS ROW 1 ══ */}
-          <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 100, type: "timing", duration: 500 }}
-            style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 20 }}>
             <StatCard icon={Star}      label="Avg. Rating"   value={fmt(profile?.average_rating)} color="#F59E0B" sub={`${profile?.total_reviews ?? 0} reviews`} />
             <StatCard icon={Briefcase} label="Total Jobs"    value={fmt(profile?.total_jobs)}     color="#3B82F6" sub={`${profile?.completed_jobs ?? 0} done`} />
             <StatCard icon={BarChart2} label="Completion"    value={`${profile?.completion_rate ?? 0}%`} color="#8B5CF6" />
-          </MotiView>
+          </View>
 
           {/* ══ STATS ROW 2 ══ */}
-          <MotiView from={{ opacity: 0, translateY: 16 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 160, type: "timing", duration: 500 }}
-            style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
             <StatCard icon={Wallet}     label="Balance"        value={`${profile?.available_balance ?? "0.00"} EGP`} color="#10B981" />
             <StatCard icon={TrendingUp} label="Total Earnings" value={`${profile?.total_earnings ?? "0.00"} EGP`}    color="#06B6D4" />
             <StatCard icon={DollarSign} label="Hourly Rate"    value={`${profile?.hourly_rate ?? "—"} EGP`}          color="#EC4899" />
-          </MotiView>
+          </View>
 
           {/* ══ PERSONAL INFO ══ */}
           <SectionLabel label="PERSONAL INFORMATION" />
-          <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 200, type: "timing", duration: 500 }}>
+          <View >
             <Card>
               <InfoRow icon={User}  label="First Name" value={fmt(profile?.first_name)} color="#3B82F6" />
               <InfoRow icon={User}  label="Last Name"  value={fmt(profile?.last_name)}  color="#3B82F6" />
               <InfoRow icon={Mail}  label="Email"      value={fmt(profile?.email)}       color="#8B5CF6" />
               <InfoRow icon={Phone} label="Phone"      value={fmt(profile?.phone)}       color="#10B981" last />
             </Card>
-          </MotiView>
+          </View>
 
           {/* ══ BUSINESS INFO ══ */}
           <SectionLabel label="BUSINESS INFORMATION" />
-          <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 260, type: "timing", duration: 500 }}>
+          <View >
             <Card>
               <InfoRow icon={Briefcase}  label="Business Name"      value={fmt(profile?.business_name)}                     color="#06B6D4" />
               <InfoRow icon={DollarSign} label="Hourly Rate"        value={fmt(profile?.hourly_rate, " EGP/hr")}            color="#EC4899" />
               <InfoRow icon={Award}      label="Years of Experience" value={fmt(profile?.years_of_experience, " yrs")}       color="#F59E0B" />
               <InfoRow icon={MapPin}     label="Address"            value={fmt(profile?.address?.replace(/\r\n/g, ", "))}   color="#EF4444" last />
             </Card>
-          </MotiView>
+          </View>
 
           {/* ══ BIO ══ */}
           {!!profile?.bio && (
             <>
               <SectionLabel label="BIO" />
-              <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 300, type: "timing", duration: 500 }}>
+              <View >
                 <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 16, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
                   <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 14, color: "#475569", lineHeight: 22 }}>{profile.bio}</Text>
                 </View>
-              </MotiView>
+              </View>
             </>
           )}
 
           {/* ══ ACCOUNT ══ */}
           <SectionLabel label="ACCOUNT" />
-          <MotiView from={{ opacity: 0, translateY: 12 }} animate={{ opacity: 1, translateY: 0 }} transition={{ delay: 340, type: "timing", duration: 500 }}>
+          <View >
             <Card>
               <InfoRow icon={Shield} label="Verification Status"
                 value={profile?.verification_status?.charAt(0).toUpperCase() + (profile?.verification_status?.slice(1) ?? "")}
                 color={profile?.verification_status === "verified" ? "#10B981" : "#F59E0B"} />
               <InfoRow icon={Clock} label="Member Since" value={profile?.date_joined ? fmtDate(profile.date_joined) : "—"} color="#64748B" last />
             </Card>
-          </MotiView>
+          </View>
 
           <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#CBD5E1", textAlign: "center", marginTop: 20 }}>
             Pull down to refresh
@@ -362,8 +381,7 @@ export default function ProviderProfileScreen() {
       {/* ══ EDIT BOTTOM SHEET ══ */}
       {editOpen && (
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15,23,42,0.6)", justifyContent: "flex-end" }}>
-          <MotiView from={{ translateY: 600 }} animate={{ translateY: 0 }} transition={{ type: "spring", damping: 22, stiffness: 180 }}
-            style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === "ios" ? 40 : 28, maxHeight: "90%" }}
+          <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === "ios" ? 40 : 28, maxHeight: "90%" }}
           >
             {/* Handle */}
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
@@ -380,24 +398,32 @@ export default function ProviderProfileScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <View style={{ flex: 1 }}>
-                  <EditField label="First Name"    value={editForm.first_name}    onChange={(v) => setEditForm((f) => ({ ...f, first_name: v }))} />
+                  <EditField label="First Name" value={editForm.first_name} error={editErrors.first_name}
+                    onChange={(v) => { setEditForm((f) => ({ ...f, first_name: v })); setEditErrors(e => ({...e, first_name: undefined as any})); }} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <EditField label="Last Name"     value={editForm.last_name}     onChange={(v) => setEditForm((f) => ({ ...f, last_name: v }))} />
+                  <EditField label="Last Name"  value={editForm.last_name}  error={editErrors.last_name}
+                    onChange={(v) => { setEditForm((f) => ({ ...f, last_name: v }));  setEditErrors(e => ({...e, last_name: undefined as any})); }} />
                 </View>
               </View>
-              <EditField label="Phone"          value={editForm.phone}         onChange={(v) => setEditForm((f) => ({ ...f, phone: v }))}         keyboardType="phone-pad" />
-              <EditField label="Business Name"  value={editForm.business_name} onChange={(v) => setEditForm((f) => ({ ...f, business_name: v }))} />
+              <EditField label="Phone" value={editForm.phone} error={editErrors.phone} keyboardType="phone-pad"
+                onChange={(v) => { setEditForm((f) => ({ ...f, phone: v })); setEditErrors(e => ({...e, phone: undefined as any})); }} />
+              <EditField label="Business Name" value={editForm.business_name} error={editErrors.business_name}
+                onChange={(v) => { setEditForm((f) => ({ ...f, business_name: v })); setEditErrors(e => ({...e, business_name: undefined as any})); }} />
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <View style={{ flex: 1 }}>
-                  <EditField label="Hourly Rate (EGP)" value={editForm.hourly_rate}         onChange={(v) => setEditForm((f) => ({ ...f, hourly_rate: v }))}         keyboardType="decimal-pad" />
+                  <EditField label="Hourly Rate (EGP)" value={editForm.hourly_rate} error={editErrors.hourly_rate} keyboardType="decimal-pad"
+                    onChange={(v) => { setEditForm((f) => ({ ...f, hourly_rate: v })); setEditErrors(e => ({...e, hourly_rate: undefined as any})); }} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <EditField label="Years Experience"  value={editForm.years_of_experience} onChange={(v) => setEditForm((f) => ({ ...f, years_of_experience: v }))} keyboardType="number-pad" />
+                  <EditField label="Years Experience" value={editForm.years_of_experience} error={editErrors.years_of_experience} keyboardType="number-pad"
+                    onChange={(v) => { setEditForm((f) => ({ ...f, years_of_experience: v })); setEditErrors(e => ({...e, years_of_experience: undefined as any})); }} />
                 </View>
               </View>
-              <EditField label="Address"  value={editForm.address} onChange={(v) => setEditForm((f) => ({ ...f, address: v }))}  multiline />
-              <EditField label="Bio"      value={editForm.bio}     onChange={(v) => setEditForm((f) => ({ ...f, bio: v }))}       multiline />
+              <EditField label="Address" value={editForm.address} error={editErrors.address} multiline
+                onChange={(v) => { setEditForm((f) => ({ ...f, address: v })); setEditErrors(e => ({...e, address: undefined as any})); }} />
+              <EditField label="Bio" value={editForm.bio} error={editErrors.bio} multiline
+                onChange={(v) => { setEditForm((f) => ({ ...f, bio: v })); setEditErrors(e => ({...e, bio: undefined as any})); }} />
 
               <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#94A3B8", marginBottom: 16 }}>
                 ✉️ Email cannot be changed. Contact support if needed.
@@ -413,7 +439,7 @@ export default function ProviderProfileScreen() {
                 </LinearGradient>
               </TouchableOpacity>
             </ScrollView>
-          </MotiView>
+          </View>
         </View>
       )}
     </View>

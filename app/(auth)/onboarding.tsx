@@ -1,204 +1,127 @@
 import React, { useRef, useState } from "react";
 import {
-  View,
-  Text,
-  Dimensions,
-  TouchableOpacity,
-  FlatList,
+  View, Text, Dimensions, TouchableOpacity,
+  FlatList, Animated, StatusBar,
 } from "react-native";
-import { router }       from "expo-router";
-import { MotiView }     from "moti";
-import { ScreenWrapper } from "@/components/shared/ScreenWrapper";
-import { Button }        from "@/components/ui/Button";
-import { Colors }        from "@/theme/colors";
-import { Typography }    from "@/theme/typography";
+import { router } from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
 
 const SLIDES = [
   {
-    id:          "1",
-    emoji:       "🔍",
-    title:       "Find Trusted\nExperts",
+    id: "1", emoji: "🔍", title: "Find Trusted\nExperts",
     description: "Browse hundreds of verified professionals for any home service — plumbing, electrical, AC, and more.",
-    bgColor:     Colors.primary[50],
-    accentColor: Colors.primary.DEFAULT,
+    bgColor: "#EFF6FF", accentColor: "#1E3A8A",
   },
   {
-    id:          "2",
-    emoji:       "⚡",
-    title:       "Fast &\nReliable Service",
+    id: "2", emoji: "⚡", title: "Fast &\nReliable Service",
     description: "Book same-day appointments. Track your provider in real-time as they head to your home.",
-    bgColor:     `${Colors.accent.DEFAULT}15`,
-    accentColor: Colors.accent.DEFAULT,
+    bgColor: "#ECFEFF", accentColor: "#06B6D4",
   },
   {
-    id:          "3",
-    emoji:       "🔒",
-    title:       "Secure\nPayments",
+    id: "3", emoji: "🔒", title: "Secure\nPayments",
     description: "Pay safely in EGP via Cash, Card, Wallet, or Fawry. Your money is protected until the job is done.",
-    bgColor:     `${Colors.success}15`,
-    accentColor: Colors.success,
+    bgColor: "#ECFDF5", accentColor: "#10B981",
   },
 ];
 
 export default function OnboardingScreen() {
   const [activeIndex, setActiveIndex] = useState(0);
   const flatListRef = useRef<FlatList>(null);
+  const fadeAnim    = useRef(new Animated.Value(1)).current;
 
-  const handleNext = () => {
+  const goNext = () => {
     if (activeIndex < SLIDES.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: activeIndex + 1 });
-      setActiveIndex((i) => i + 1);
+      const next = activeIndex + 1;
+      Animated.timing(fadeAnim, { toValue: 0, duration: 150, useNativeDriver: true }).start(() => {
+        flatListRef.current?.scrollToIndex({ index: next, animated: false });
+        setActiveIndex(next);
+        Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+      });
     } else {
-      router.replace("/(auth)/role-select");
+      router.replace("/(auth)/role-select" as any);
     }
   };
 
-  const handleSkip = () => {
-    router.replace("/(auth)/role-select");
-  };
+  const slide = SLIDES[activeIndex];
 
   return (
-    <View style={{ flex: 1, backgroundColor: Colors.background }}>
-      {/* Skip Button */}
-      <View
-        style={{
-          position:    "absolute",
-          top:         56,
-          right:       24,
-          zIndex:      10,
-        }}
-      >
-        <TouchableOpacity onPress={handleSkip}>
-          <Text
-            style={{
-              fontFamily: Typography.fonts.medium,
-              fontSize:   Typography.sizes.base,
-              color:      Colors.text.secondary,
-            }}
-          >
-            Skip
-          </Text>
-        </TouchableOpacity>
-      </View>
+    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+      <StatusBar barStyle="dark-content" />
+
+      {/* Skip */}
+      <TouchableOpacity onPress={() => router.replace("/(auth)/role-select" as any)}
+        style={{ position: "absolute", top: height * 0.07, right: 24, zIndex: 10, padding: 8 }}>
+        <Text style={{ fontSize: 14, color: "#64748B" }}>Skip</Text>
+      </TouchableOpacity>
 
       {/* Slides */}
       <FlatList
         ref={flatListRef}
         data={SLIDES}
-        keyExtractor={(item) => item.id}
-        horizontal
-        pagingEnabled
-        scrollEnabled
+        keyExtractor={item => item.id}
+        horizontal pagingEnabled scrollEnabled={false}
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={(e) => {
-          const index = Math.round(
-            e.nativeEvent.contentOffset.x / width
-          );
-          setActiveIndex(index);
-        }}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         renderItem={({ item }) => (
-          <View
-            style={{
-              width,
-              flex:           1,
-              alignItems:     "center",
-              justifyContent: "center",
-              paddingHorizontal: 32,
-              paddingTop:     100,
-            }}
-          >
-            {/* Emoji Circle */}
-            <MotiView
-              from={{ scale: 0.5, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ type: "spring", damping: 12 }}
-              style={{
-                width:           140,
-                height:          140,
-                borderRadius:    44,
-                backgroundColor: item.bgColor,
-                alignItems:      "center",
-                justifyContent:  "center",
-                marginBottom:    48,
-              }}
-            >
-              <Text style={{ fontSize: 72 }}>{item.emoji}</Text>
-            </MotiView>
+          <Animated.View style={{
+            width, flex: 1, alignItems: "center", justifyContent: "center",
+            paddingHorizontal: 32, paddingTop: height * 0.1,
+            opacity: fadeAnim,
+          }}>
+            {/* Emoji circle */}
+            <View style={{
+              width: width * 0.38, height: width * 0.38, borderRadius: width * 0.13,
+              backgroundColor: item.bgColor, alignItems: "center", justifyContent: "center",
+              marginBottom: height * 0.06,
+            }}>
+              <Text style={{ fontSize: width * 0.18 }}>{item.emoji}</Text>
+            </View>
 
-            {/* Text */}
-            <MotiView
-              from={{ opacity: 0, translateY: 20 }}
-              animate={{ opacity: 1, translateY: 0 }}
-              transition={{ delay: 200, type: "timing", duration: 500 }}
-            >
-              <Text
-                style={{
-                  fontFamily:   Typography.fonts.extrabold,
-                  fontSize:     Typography.sizes["3xl"],
-                  color:        Colors.text.primary,
-                  textAlign:    "center",
-                  marginBottom: 16,
-                  lineHeight:   40,
-                }}
-              >
-                {item.title}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: Typography.fonts.regular,
-                  fontSize:   Typography.sizes.base,
-                  color:      Colors.text.secondary,
-                  textAlign:  "center",
-                  lineHeight: 24,
-                }}
-              >
-                {item.description}
-              </Text>
-            </MotiView>
-          </View>
+            <Text style={{
+              fontSize: width * 0.075, fontWeight: "800", color: "#0F172A",
+              textAlign: "center", marginBottom: height * 0.02, lineHeight: width * 0.1,
+            }}>
+              {item.title}
+            </Text>
+            <Text style={{
+              fontSize: width * 0.036, color: "#64748B",
+              textAlign: "center", lineHeight: width * 0.058,
+            }}>
+              {item.description}
+            </Text>
+          </Animated.View>
         )}
       />
 
-      {/* Bottom Controls */}
-      <View
-        style={{
-          paddingHorizontal: 24,
-          paddingBottom:     48,
-          gap:               24,
-        }}
-      >
+      {/* Bottom controls */}
+      <View style={{ paddingHorizontal: 24, paddingBottom: height * 0.06, gap: 20 }}>
+
         {/* Dots */}
-        <View
-          style={{
-            flexDirection:  "row",
-            justifyContent: "center",
-            gap:            8,
-          }}
-        >
-          {SLIDES.map((_, i) => (
-            <MotiView
-              key={i}
-              animate={{
-                width:           i === activeIndex ? 24 : 8,
-                backgroundColor: i === activeIndex
-                  ? SLIDES[activeIndex].accentColor
-                  : Colors.border,
-              }}
-              transition={{ type: "spring", damping: 15 }}
-              style={{ height: 8, borderRadius: 4 }}
-            />
+        <View style={{ flexDirection: "row", justifyContent: "center", gap: 8 }}>
+          {SLIDES.map((s, i) => (
+            <View key={i} style={{
+              height: 8, borderRadius: 4,
+              width: i === activeIndex ? 24 : 8,
+              backgroundColor: i === activeIndex ? slide.accentColor : "#E2E8F0",
+            }} />
           ))}
         </View>
 
-        {/* Button */}
-        <Button
-          label={activeIndex === SLIDES.length - 1 ? "Get Started" : "Next"}
-          variant="primary"
-          size="lg"
-          onPress={handleNext}
-        />
+        {/* Next / Get Started button — no external component, pure TouchableOpacity */}
+        <TouchableOpacity onPress={goNext} activeOpacity={0.88}
+          style={{ borderRadius: 18, overflow: "hidden" }}>
+          <LinearGradient
+            colors={["#1E3A8A", "#2563EB"]}
+            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+            style={{ height: 56, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 16, fontWeight: "700", color: "#fff" }}>
+              {activeIndex === SLIDES.length - 1 ? "Get Started 🚀" : "Next →"}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+
       </View>
     </View>
   );

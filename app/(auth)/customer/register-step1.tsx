@@ -1,233 +1,125 @@
 import React, { useState } from "react";
-import { View, Text, TouchableOpacity } from "react-native";
-import { router } from "expo-router";
-import { MotiView } from "moti";
-import { User, Mail, Phone, ArrowLeft } from "lucide-react-native";
-import { ScreenWrapper } from "@/components/shared/ScreenWrapper";
-import { Button } from "@/components/ui/Button";
-import { Input } from "@/components/ui/Input";
-import { Colors } from "@/theme/colors";
+import {
+  View, Text, TouchableOpacity,
+  TextInput, StatusBar, Platform, ScrollView,
+} from "react-native";
+import { router }         from "expo-router";
+import { LinearGradient } from "expo-linear-gradient";
+import { User, Mail, Phone, ArrowLeft, AlertCircle } from "lucide-react-native";
 import { Typography } from "@/theme/typography";
 
-/* ─── Step Progress Bar ─── */
-const StepProgress: React.FC<{ current: number; total: number; color: string }> = ({
-  current, total, color,
-}) => (
-  <View style={{ flexDirection: "row", gap: 8, marginBottom: 32 }}>
+const StepProgress = ({ current, total }: { current: number; total: number }) => (
+  <View style={{ flexDirection:"row", gap:8, marginBottom:28 }}>
     {Array.from({ length: total }).map((_, i) => (
-      <MotiView
-        key={i}
-        animate={{
-          flex: i < current ? 1.5 : 1,
-          backgroundColor: i < current ? color : Colors.border,
-          opacity: i < current ? 1 : 0.5,
-        }}
-        transition={{ type: "spring", damping: 15 }}
-        style={{ height: 4, borderRadius: 2 }}
-      />
+      <View key={i} style={{ flex: i < current ? 1.5 : 1, height:4, borderRadius:2, backgroundColor: i < current ? "#1E3A8A" : "#E2E8F0" }} />
     ))}
   </View>
 );
 
-/* ─── Validation helpers ─── */
-const isValidName  = (v: string) => v.trim().length >= 2;
-const isValidEmail = (v: string) => /\S+@\S+\.\S+/.test(v);
-const isValidPhone = (v: string) => /^[+]?[\d\s\-()]{7,15}$/.test(v.trim());
+function FieldError({ msg }: { msg?: string }) {
+  if (!msg) return null;
+  return (
+    <View style={{ flexDirection:"row", alignItems:"center", gap:5, marginTop:5 }}>
+      <AlertCircle size={12} color="#EF4444" />
+      <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#EF4444" }}>{msg}</Text>
+    </View>
+  );
+}
 
-/* ══════════════════════════════════════════════════════════════════ */
+const FIELDS = [
+  { key:"first_name", label:"First Name",    placeholder:"e.g. Ahmed",          icon: User,  kb:"default",       cap:"words"        },
+  { key:"last_name",  label:"Last Name",     placeholder:"e.g. Mohamed",        icon: User,  kb:"default",       cap:"words"        },
+  { key:"email",      label:"Email Address", placeholder:"ahmed@example.com",    icon: Mail,  kb:"email-address", cap:"none"         },
+  { key:"phone",      label:"Phone Number",  placeholder:"+20 100 000 0000",     icon: Phone, kb:"phone-pad",     cap:"none"         },
+];
 
 export default function CustomerRegisterStep1() {
-  const [form, setForm] = useState({
-    first_name: "",
-    last_name:  "",
-    email:      "",
-    phone:      "",
-  });
+  const [form,   setForm]   = useState({ first_name:"", last_name:"", email:"", phone:"" });
+  const [errors, setErrors] = useState<Record<string,string>>({});
 
-  const [errors, setErrors] = useState<{
-    first_name?: string;
-    last_name?:  string;
-    email?:      string;
-    phone?:      string;
-  }>({});
-
-  const update = (field: keyof typeof form) => (value: string) => {
-    setForm((f) => ({ ...f, [field]: value }));
-    setErrors((e) => ({ ...e, [field]: undefined }));
+  const update = (field: string) => (val: string) => {
+    setForm(f => ({ ...f, [field]: val }));
+    setErrors(e => ({ ...e, [field]: undefined as any }));
   };
 
-  const validate = (): boolean => {
-    const newErrors: typeof errors = {};
-    if (!isValidName(form.first_name))
-      newErrors.first_name = "First name must be at least 2 characters";
-    if (!isValidName(form.last_name))
-      newErrors.last_name = "Last name must be at least 2 characters";
-    if (!isValidEmail(form.email))
-      newErrors.email = "Please enter a valid email address";
-    if (!isValidPhone(form.phone))
-      newErrors.phone = "Please enter a valid phone number";
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  const validate = () => {
+    const e: Record<string,string> = {};
+    if (form.first_name.trim().length < 2)  e.first_name = "At least 2 characters";
+    if (form.last_name.trim().length  < 2)  e.last_name  = "At least 2 characters";
+    if (!/\S+@\S+\.\S+/.test(form.email))   e.email      = "Enter a valid email address";
+    if (!/^[+]?[\d\s\-()]{7,15}$/.test(form.phone.trim())) e.phone = "Enter a valid phone number";
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
   const handleNext = () => {
     if (!validate()) return;
-    router.push({
-      pathname: "/(auth)/customer/register-step2",
-      params: { ...form },
-    });
+    router.push({ pathname:"/(auth)/customer/register-step2" as any, params: { ...form } });
   };
 
+  const inputWrap = (field: string): any => ({
+    flexDirection:"row", alignItems:"center", backgroundColor:"#fff",
+    borderRadius:14, borderWidth:1.5, paddingHorizontal:14, height:52,
+    borderColor: errors[field] ? "#FCA5A5" : "#E2E8F0",
+  });
+
   return (
-    <ScreenWrapper scrollable>
-      {/* Back */}
-      <TouchableOpacity
-        onPress={() => router.back()}
-        style={{
-          marginTop: 16, width: 44, height: 44, borderRadius: 14,
-          backgroundColor: Colors.surface, alignItems: "center",
-          justifyContent: "center", borderWidth: 1, borderColor: Colors.border,
-        }}
-      >
-        <ArrowLeft size={20} color={Colors.text.primary} />
-      </TouchableOpacity>
+    <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
+      <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
 
-      {/* Header */}
-      <MotiView
-        from={{ opacity: 0, translateY: 20 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ type: "timing", duration: 600 }}
-        style={{ paddingTop: 24 }}
-      >
-        <StepProgress current={1} total={2} color={Colors.primary.DEFAULT} />
+      <LinearGradient colors={["#1E3A8A","#2563EB"]} start={{x:0,y:0}} end={{x:1,y:1}}
+        style={{ paddingTop: Platform.OS==="android"?48:60, paddingBottom:32, paddingHorizontal:24, overflow:"hidden" }}>
+        <View style={{ position:"absolute", top:-40, right:-40, width:180, height:180, borderRadius:90, backgroundColor:"rgba(255,255,255,0.05)" }} />
+        <TouchableOpacity onPress={() => router.back()}
+          style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.12)", alignItems:"center", justifyContent:"center", marginBottom:24 }}>
+          <ArrowLeft size={20} color="#fff" />
+        </TouchableOpacity>
+        <View >
+          <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize:26, color:"#fff", marginBottom:4 }}>Personal Information</Text>
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color:"rgba(255,255,255,0.6)" }}>Step 1 of 2 — Tell us about yourself</Text>
+        </View>
+      </LinearGradient>
 
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-          <View style={{
-            paddingHorizontal: 12, paddingVertical: 4,
-            borderRadius: 20, backgroundColor: Colors.primary[100],
-          }}>
-            <Text style={{
-              fontFamily: Typography.fonts.semibold, fontSize: Typography.sizes.xs,
-              color: Colors.primary.DEFAULT, letterSpacing: 1,
-            }}>
-              STEP 1 OF 2
+      <ScrollView contentContainerStyle={{ padding:24, paddingBottom:60 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <StepProgress current={1} total={2} />
+
+        {FIELDS.map((field, i) => (
+          <View key={field.key} style={{ marginBottom:16 }}>
+            <Text style={{ fontFamily: Typography.fonts.medium, fontSize:13, color:"#64748B", marginBottom:8 }}>
+              {field.label} <Text style={{ color:"#EF4444" }}>*</Text>
             </Text>
+            <View style={inputWrap(field.key)}>
+              <field.icon size={18} color="#94A3B8" style={{ marginRight:10 }} />
+              <TextInput
+                value={(form as any)[field.key]}
+                onChangeText={update(field.key)}
+                placeholder={field.placeholder} placeholderTextColor="#CBD5E1"
+                keyboardType={field.kb as any} autoCapitalize={field.cap as any}
+                style={{ flex:1, fontFamily: Typography.fonts.regular, fontSize:14, color:"#0F172A" }}
+              />
+            </View>
+            <FieldError msg={errors[field.key]} />
           </View>
+        ))}
+
+        {/* Privacy note */}
+        <View style={{ flexDirection:"row", alignItems:"flex-start", gap:12, backgroundColor:"#EFF6FF", borderRadius:14, padding:14, marginBottom:28, borderWidth:1, borderColor:"#BFDBFE" }}>
+          <Text style={{ fontSize:18 }}>🔒</Text>
+          <Text style={{ flex:1, fontFamily: Typography.fonts.regular, fontSize:13, color:"#1E40AF", lineHeight:20 }}>
+            Your information is encrypted and <Text style={{ fontFamily: Typography.fonts.semibold }}>never shared</Text> with third parties.
+          </Text>
         </View>
 
-        <Text style={{
-          fontFamily: Typography.fonts.extrabold, fontSize: Typography.sizes["3xl"],
-          color: Colors.text.primary, marginBottom: 8, lineHeight: 36,
-        }}>
-          Personal{"\n"}
-          <Text style={{ color: Colors.primary.DEFAULT }}>Information</Text>
-        </Text>
+        <TouchableOpacity onPress={handleNext} activeOpacity={0.85}
+          style={{ borderRadius:18, overflow:"hidden" }}>
+          <LinearGradient colors={["#1E3A8A","#2563EB"]} start={{x:0,y:0}} end={{x:1,y:0}}
+            style={{ height:54, alignItems:"center", justifyContent:"center", flexDirection:"row", gap:8 }}>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Continue</Text>
+            <Text style={{ color:"#fff", fontSize:18 }}>→</Text>
+          </LinearGradient>
+        </TouchableOpacity>
 
-        <Text style={{
-          fontFamily: Typography.fonts.regular, fontSize: Typography.sizes.base,
-          color: Colors.text.secondary, lineHeight: 22, marginBottom: 32,
-        }}>
-          Tell us a bit about yourself so we can{"\n"}set up your SnapFix account.
-        </Text>
-      </MotiView>
-
-      {/* Form */}
-      <MotiView
-        from={{ opacity: 0, translateY: 30 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ delay: 200, type: "timing", duration: 600 }}
-      >
-        <Input
-          label="First Name"
-          isRequired
-          placeholder="e.g. Ahmed"
-          value={form.first_name}
-          onChangeText={update("first_name")}
-          error={errors.first_name}
-          autoCapitalize="words"
-          returnKeyType="next"
-          leftIcon={<User size={18} color={Colors.text.secondary} />}
-        />
-
-        <Input
-          label="Last Name"
-          isRequired
-          placeholder="e.g. Mohamed"
-          value={form.last_name}
-          onChangeText={update("last_name")}
-          error={errors.last_name}
-          autoCapitalize="words"
-          returnKeyType="next"
-          leftIcon={<User size={18} color={Colors.text.secondary} />}
-        />
-
-        <Input
-          label="Email Address"
-          isRequired
-          placeholder="ahmed@example.com"
-          value={form.email}
-          onChangeText={update("email")}
-          error={errors.email}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="next"
-          leftIcon={<Mail size={18} color={Colors.text.secondary} />}
-        />
-
-        <Input
-          label="Phone Number"
-          isRequired
-          placeholder="+20 100 000 0000"
-          value={form.phone}
-          onChangeText={update("phone")}
-          error={errors.phone}
-          keyboardType="phone-pad"
-          returnKeyType="done"
-          leftIcon={<Phone size={18} color={Colors.text.secondary} />}
-        />
-      </MotiView>
-
-      {/* Info Card */}
-      <MotiView
-        from={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 400, type: "timing", duration: 600 }}
-        style={{
-          flexDirection: "row", alignItems: "flex-start", gap: 12,
-          backgroundColor: Colors.primary[50], borderRadius: 16,
-          padding: 16, marginBottom: 24,
-          borderWidth: 1, borderColor: Colors.primary[100],
-        }}
-      >
-        <Text style={{ fontSize: 20 }}>🔒</Text>
-        <Text style={{
-          flex: 1, fontFamily: Typography.fonts.regular,
-          fontSize: Typography.sizes.sm, color: Colors.text.secondary, lineHeight: 20,
-        }}>
-          Your personal information is encrypted and{" "}
-          <Text style={{ fontFamily: Typography.fonts.semibold, color: Colors.primary.DEFAULT }}>
-            never shared
-          </Text>{" "}
-          with third parties.
-        </Text>
-      </MotiView>
-
-      {/* Next Button */}
-      <MotiView
-        from={{ opacity: 0, translateY: 20 }}
-        animate={{ opacity: 1, translateY: 0 }}
-        transition={{ delay: 500, type: "timing", duration: 500 }}
-        style={{ marginBottom: 32 }}
-      >
-        <Button
-          label="Continue"
-          variant="primary"
-          size="lg"
-          onPress={handleNext}
-          rightIcon={<Text style={{ color: "#fff", fontSize: 18 }}>→</Text>}
-        />
-      </MotiView>
-    </ScreenWrapper>
+      </ScrollView>
+    </View>
   );
 }

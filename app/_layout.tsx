@@ -1,9 +1,6 @@
-import "../global.css";
-
-import React, { useCallback } from "react";
-import { Platform }           from "react-native";
-import { Stack }              from "expo-router";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import React, { useCallback, useEffect } from "react";
+import { View, Platform } from "react-native";
+import { Stack } from "expo-router";
 import {
   useFonts,
   Poppins_400Regular,
@@ -13,19 +10,14 @@ import {
   Poppins_800ExtraBold,
 } from "@expo-google-fonts/poppins";
 
-// Fix NativeWind dark mode on web
-import { StyleSheet } from "react-native";
-if (Platform.OS === "web") {
-  // Tell NativeWind to use 'class' strategy instead of 'media'
-  (StyleSheet as any).setFlag?.("darkMode", "class");
-}
-
-// Only use splash screen on native
-let SplashScreen: any = null;
-if (Platform.OS !== "web") {
-  SplashScreen = require("expo-splash-screen");
-  SplashScreen.preventAutoHideAsync();
-}
+// Conditionally load SplashScreen only on native
+let ExpoSplashScreen: any = null;
+try {
+  if (Platform.OS !== "web") {
+    ExpoSplashScreen = require("expo-splash-screen");
+    ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
+  }
+} catch {}
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -36,28 +28,28 @@ export default function RootLayout() {
     Poppins_800ExtraBold,
   });
 
-  const onLayoutRootView = useCallback(async () => {
+  useEffect(() => {
     if (fontsLoaded || fontError) {
-      if (Platform.OS !== "web" && SplashScreen) {
-        await SplashScreen.hideAsync();
+      if (ExpoSplashScreen) {
+        ExpoSplashScreen.hideAsync().catch(() => {});
       }
     }
   }, [fontsLoaded, fontError]);
 
+  // Don't return null — return a View so the native splash hides
+  // If we return null, SplashScreen.hideAsync never fires on some Android versions
   if (!fontsLoaded && !fontError) {
-    return null;
+    return (
+      <View style={{ flex: 1, backgroundColor: "#1E3A8A" }} />
+    );
   }
 
   return (
-    <GestureHandlerRootView
-      style={{ flex: 1 }}
-      onLayout={onLayoutRootView}
-    >
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)"     />
-        <Stack.Screen name="(customer)" />
-        <Stack.Screen name="(provider)" />
-      </Stack>
-    </GestureHandlerRootView>
+    <Stack screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="index"      />
+      <Stack.Screen name="(auth)"     />
+      <Stack.Screen name="(customer)" />
+      <Stack.Screen name="(provider)" />
+    </Stack>
   );
 }

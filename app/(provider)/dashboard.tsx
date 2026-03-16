@@ -5,7 +5,6 @@ import {
   Modal, Animated, Pressable,
 } from "react-native";
 import { router }            from "expo-router";
-import { MotiView }          from "moti";
 import { LinearGradient }    from "expo-linear-gradient";
 import {
   Bell, Star, TrendingUp, CheckCircle, Clock,
@@ -84,7 +83,7 @@ function ProviderDrawer({
   const handleLogout = async () => {
     onClose();
     await logout();
-    setTimeout(() => router.replace("/(auth)/role-select" as any), 250);
+    setTimeout(() => router.replace("/(auth)/provider/login" as any), 250);
   };
 
   const firstName = user?.first_name ?? "Provider";
@@ -273,42 +272,39 @@ export default function ProviderDashboard() {
             <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
               <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
                 {/* ── Hamburger ── */}
-                <MotiView from={{ opacity:0, scale:0.8 }} animate={{ opacity:1, scale:1 }} transition={{ type:"spring", damping:14 }}>
+                <View >
                   <TouchableOpacity
                     onPress={() => setDrawerOpen(true)}
                     style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}
                   >
                     <Menu size={22} color="#fff" />
                   </TouchableOpacity>
-                </MotiView>
+                </View>
 
-                <MotiView from={{ opacity:0, translateY:-10 }} animate={{ opacity:1, translateY:0 }} transition={{ type:"timing", duration:500 }}>
+                <View >
                   <TouchableOpacity onPress={() => router.push("/(provider)/profile" as any)}>
                     <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(13), color:"rgba(255,255,255,0.5)", marginBottom:2 }}>{greeting}, 👷</Text>
                     <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize:r.fs(22), color:"#fff", lineHeight:28 }}>{firstName}</Text>
                   </TouchableOpacity>
-                </MotiView>
+                </View>
               </View>
 
               {/* Bell */}
-              <MotiView from={{ opacity:0, scale:0.8 }} animate={{ opacity:1, scale:1 }} transition={{ delay:100, type:"spring", damping:14 }}>
+              <View >
                 <TouchableOpacity style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}>
                   <Bell size={20} color="#fff" />
                   <View style={{ position:"absolute", top:9, right:9, width:8, height:8, borderRadius:4, backgroundColor:"#06B6D4", borderWidth:1.5, borderColor:"#0F172A" }} />
                 </TouchableOpacity>
-              </MotiView>
+              </View>
             </View>
 
             {/* ── ONLINE TOGGLE CARD ── */}
-            <MotiView from={{ opacity:0, translateY:16 }} animate={{ opacity:1, translateY:0 }} transition={{ delay:150, type:"timing", duration:500 }}>
+            <View >
               <View style={{ backgroundColor:"rgba(255,255,255,0.06)", borderRadius:20, padding:20, borderWidth:1, borderColor: isOnline ? "rgba(6,182,212,0.4)" : "rgba(255,255,255,0.08)" }}>
                 <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
                   <View style={{ flex:1 }}>
                     <View style={{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:4 }}>
-                      <MotiView
-                        animate={{ scale: isOnline ? [1,1.3,1] : 1, opacity: isOnline ? 1 : 0.4 }}
-                        transition={{ loop: isOnline, type:"timing", duration:1200 }}
-                        style={{ width:10, height:10, borderRadius:5, backgroundColor: isOnline ? "#06B6D4" : "#475569" }}
+                      <View style={{ width:10, height:10, borderRadius:5, backgroundColor: isOnline ? "#06B6D4" : "#475569" }}
                       />
                       <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(16), color: isOnline ? "#06B6D4" : "#94A3B8" }}>
                         {isOnline ? "Online" : "Offline"}
@@ -328,8 +324,7 @@ export default function ProviderDashboard() {
                 </View>
 
                 {isOnline && (
-                  <MotiView from={{ opacity:0 }} animate={{ opacity:1 }} transition={{ type:"timing", duration:300 }}
-                    style={{ marginTop:16, paddingTop:16, borderTopWidth:1, borderTopColor:"rgba(255,255,255,0.08)", flexDirection:"row", justifyContent:"space-around" }}
+                  <View style={{ marginTop:16, paddingTop:16, borderTopWidth:1, borderTopColor:"rgba(255,255,255,0.08)", flexDirection:"row", justifyContent:"space-around" }}
                   >
                     {[
                       { label:"Today",      value:"0 EGP", icon:DollarSign },
@@ -342,10 +337,10 @@ export default function ProviderDashboard() {
                         <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(10), color:"rgba(255,255,255,0.4)" }}>{item.label}</Text>
                       </View>
                     ))}
-                  </MotiView>
+                  </View>
                 )}
               </View>
-            </MotiView>
+            </View>
           </View>
         </LinearGradient>
 
@@ -353,14 +348,12 @@ export default function ProviderDashboard() {
         <View style={centerWrap}>
 
           {/* STATS */}
-          <MotiView from={{ opacity:0, translateY:20 }} animate={{ opacity:1, translateY:0 }} transition={{ delay:200, type:"timing", duration:500 }}
-            style={{ flexDirection:"row", flexWrap:"wrap", gap:r.gap, marginTop:20 }}
+          <View style={{ flexDirection:"row", flexWrap:"wrap", gap:r.gap, marginTop:20 }}
           >
             {STATS.map((s, i) => {
               const wPhone: any = (r.width - r.px * 2 - r.gap) / 2;
               return (
-                <MotiView key={s.label} from={{ opacity:0, scale:0.9 }} animate={{ opacity:1, scale:1 }} transition={{ delay:i*60, type:"spring", damping:14 }}
-                  style={{ width: r.isWeb ? (r.width - r.px * 2 - r.gap * 3) / 4 : wPhone }}
+                <View key={s.label} style={{ width: r.isWeb ? (r.width - r.px * 2 - r.gap * 3) / 4 : wPhone }}
                 >
                   <View style={{ backgroundColor:"#fff", borderRadius:20, padding:r.fs(16), shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:10, elevation:3, borderWidth:1, borderColor:"#F1F5F9" }}>
                     <View style={{ width:40, height:40, borderRadius:14, backgroundColor:s.bg, alignItems:"center", justifyContent:"center", marginBottom:10 }}>
@@ -369,14 +362,14 @@ export default function ProviderDashboard() {
                     <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(20), color:"#0F172A", marginBottom:2 }}>{s.value}</Text>
                     <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(11), color:"#94A3B8", lineHeight:15 }}>{s.label}</Text>
                   </View>
-                </MotiView>
+                </View>
               );
             })}
-          </MotiView>
+          </View>
 
           {/* JOB REQUESTS */}
           {isOnline && (
-            <MotiView from={{ opacity:0, translateY:20 }} animate={{ opacity:1, translateY:0 }} transition={{ delay:300, type:"timing", duration:500 }} style={{ marginTop:28 }}>
+            <View style={{ marginTop:28 }}>
               <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
                   <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(18), color:"#0F172A" }}>New Requests</Text>
@@ -390,8 +383,7 @@ export default function ProviderDashboard() {
 
               <View style={{ flexDirection:"row", flexWrap:"wrap", gap:r.gap }}>
                 {JOB_REQUESTS.map((job, i) => (
-                  <MotiView key={job.id} from={{ opacity:0, translateY:20 }} animate={{ opacity:1, translateY:0 }} transition={{ delay:i*100, type:"timing", duration:400 }}
-                    style={{ width: (r.isTablet || r.isWeb) ? (r.width - r.px * 2 - r.gap) / 2 : "100%" as any }}
+                  <View key={job.id} style={{ width: (r.isTablet || r.isWeb) ? (r.width - r.px * 2 - r.gap) / 2 : "100%" as any }}
                   >
                     <View style={{ backgroundColor:"#fff", borderRadius:20, padding:18, shadowColor:"#1E3A8A", shadowOffset:{width:0,height:4}, shadowOpacity:0.08, shadowRadius:14, elevation:4, borderWidth:1.5, borderColor: job.urgency==="urgent" ? "#FEE2E2" : "#F1F5F9" }}>
                       {job.urgency === "urgent" && (
@@ -424,8 +416,7 @@ export default function ProviderDashboard() {
                         </View>
                       </View>
                       <View style={{ height:3, backgroundColor:"#F1F5F9", borderRadius:2, marginBottom:14, overflow:"hidden" }}>
-                        <MotiView from={{ width:"100%" }} animate={{ width:"0%" }} transition={{ type:"timing", duration:job.timer*1000, loop:false }}
-                          style={{ height:"100%", backgroundColor: job.urgency==="urgent" ? "#EF4444" : "#06B6D4", borderRadius:2 }}
+                        <View style={{ height:"100%", backgroundColor: job.urgency==="urgent" ? "#EF4444" : "#06B6D4", borderRadius:2 }}
                         />
                       </View>
                       <View style={{ flexDirection:"row", gap:10 }}>
@@ -440,16 +431,15 @@ export default function ProviderDashboard() {
                         </TouchableOpacity>
                       </View>
                     </View>
-                  </MotiView>
+                  </View>
                 ))}
               </View>
-            </MotiView>
+            </View>
           )}
 
           {/* OFFLINE NUDGE */}
           {!isOnline && (
-            <MotiView from={{ opacity:0 }} animate={{ opacity:1 }} transition={{ delay:400, type:"timing", duration:400 }}
-              style={{ marginTop:28, backgroundColor:"#fff", borderRadius:20, padding:24, alignItems:"center", borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:10, elevation:2 }}
+            <View style={{ marginTop:28, backgroundColor:"#fff", borderRadius:20, padding:24, alignItems:"center", borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:10, elevation:2 }}
             >
               <Text style={{ fontSize:40, marginBottom:12 }}>😴</Text>
               <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(16), color:"#0F172A", marginBottom:6, textAlign:"center" }}>You're currently offline</Text>
@@ -459,7 +449,7 @@ export default function ProviderDashboard() {
               <TouchableOpacity onPress={() => setIsOnline(true)} style={{ backgroundColor:"#0F172A", paddingHorizontal:28, paddingVertical:12, borderRadius:16 }}>
                 <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(14), color:"#06B6D4" }}>Go Online Now</Text>
               </TouchableOpacity>
-            </MotiView>
+            </View>
           )}
 
           {/* RECENT JOBS */}
@@ -472,7 +462,7 @@ export default function ProviderDashboard() {
               </TouchableOpacity>
             </View>
             {RECENT_JOBS.map((job, i) => (
-              <MotiView key={job.id} from={{ opacity:0, translateX:20 }} animate={{ opacity:1, translateX:0 }} transition={{ delay:i*80, type:"timing", duration:400 }}>
+              <View key={job.id} >
                 <TouchableOpacity style={{ backgroundColor:"#fff", borderRadius:18, padding:16, flexDirection:"row", alignItems:"center", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:10, elevation:2, borderWidth:1, borderColor:"#F1F5F9", marginBottom:10 }}>
                   <View style={{ width:46, height:46, borderRadius:15, backgroundColor:"#F8FAFC", alignItems:"center", justifyContent:"center", marginRight:14 }}>
                     <Text style={{ fontSize:22 }}>{job.emoji}</Text>
@@ -488,12 +478,12 @@ export default function ProviderDashboard() {
                     </View>
                   </View>
                 </TouchableOpacity>
-              </MotiView>
+              </View>
             ))}
           </View>
 
           {/* PERFORMANCE */}
-          <MotiView from={{ opacity:0, translateY:20 }} animate={{ opacity:1, translateY:0 }} transition={{ delay:500, type:"timing", duration:500 }} style={{ marginTop:20, marginBottom:8 }}>
+          <View style={{ marginTop:20, marginBottom:8 }}>
             <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:1}}
               style={{ borderRadius:24, padding:24, overflow:"hidden" }}>
               <View style={{ position:"absolute", top:-30, right:-30, width:120, height:120, borderRadius:60, backgroundColor:"rgba(6,182,212,0.08)" }} />
@@ -517,7 +507,7 @@ export default function ProviderDashboard() {
                 </View>
               ))}
             </LinearGradient>
-          </MotiView>
+          </View>
 
         </View>
       </ScrollView>
