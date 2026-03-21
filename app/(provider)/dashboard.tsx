@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   Switch, StatusBar, Platform, useWindowDimensions,
-  Modal, Animated, Pressable,
+  Modal, Animated, Pressable, ActivityIndicator,
+  RefreshControl, Alert,
 } from "react-native";
 import { router }            from "expo-router";
 import { LinearGradient }    from "expo-linear-gradient";
@@ -12,10 +13,12 @@ import {
   Briefcase, AlertCircle, ThumbsUp, Navigation,
   Menu, X, Home, BookOpen, User, Settings,
   HelpCircle, LogOut, Shield, Wallet, BarChart2,
-  MessageCircle,
+  MessageCircle, RefreshCw, Calendar,
 } from "lucide-react-native";
-import { useAuthStore } from "@/store/authStore";
-import { Typography }   from "@/theme/typography";
+import { useAuthStore }       from "@/store/authStore";
+import { Typography }         from "@/theme/typography";
+import { getProviderProfile } from "@/services/providerService";
+import { getOpenJobs, getMyJobs, pickJob, type ServiceRequest } from "@/services/bookingService";
 
 /* ─── Responsive ──────────────────────────────────────────────────── */
 function useR() {
@@ -32,30 +35,17 @@ function useR() {
   };
 }
 
-/* ─── Drawer nav items ────────────────────────────────────────────── */
+/* ─── Drawer ─────────────────────────────────────────────────────── */
 const DRAWER_MAIN = [
-  { id: "dashboard", label: "Dashboard",      icon: Home,          route: "/(provider)/dashboard",  color: "#06B6D4" },
-  { id: "jobs",      label: "My Jobs",         icon: Briefcase,     route: "/(provider)/jobs",       color: "#3B82F6" },
-  { id: "earnings",  label: "Earnings",        icon: DollarSign,    route: "/(provider)/earnings",   color: "#10B981" },
-  { id: "wallet",    label: "Wallet",          icon: Wallet,        route: "/(provider)/wallet",     color: "#F59E0B" },
-  { id: "chat",      label: "Messages",        icon: MessageCircle, route: "/(provider)/chat",       color: "#8B5CF6" },
-  { id: "stats",     label: "Performance",     icon: BarChart2,     route: "/(provider)/stats",      color: "#EC4899" },
-  { id: "profile",   label: "My Profile",      icon: User,          route: "/(provider)/profile",    color: "#64748B" },
-  { id: "settings",  label: "Settings",        icon: Settings,      route: "/(provider)/settings",   color: "#64748B" },
+  { id:"dashboard", label:"Dashboard",  icon:Home,          route:"/(provider)/dashboard", color:"#06B6D4" },
+  { id:"jobs",      label:"My Jobs",    icon:Briefcase,     route:"/(provider)/jobs",      color:"#3B82F6" },
+  { id:"wallet",    label:"Wallet",     icon:Wallet,        route:"/(provider)/wallet",    color:"#F59E0B" },
+  { id:"chat",      label:"Messages",   icon:MessageCircle, route:"/(provider)/chat",      color:"#8B5CF6" },
+  { id:"profile",   label:"My Profile", icon:User,          route:"/(provider)/profile",   color:"#64748B" },
 ];
 
-const DRAWER_BOTTOM = [
-  { id: "help",   label: "Help & Support", icon: HelpCircle, route: "/(provider)/support", color: "#64748B" },
-  { id: "safety", label: "Safety Center",  icon: Shield,     route: "/(provider)/safety",  color: "#64748B" },
-];
-
-/* ══════════════════════════════════════════════════════════════════
-   NAVIGATION DRAWER  (dark theme — matches dashboard)
-══════════════════════════════════════════════════════════════════ */
-function ProviderDrawer({
-  visible, onClose, user, activeRoute = "dashboard",
-}: {
-  visible: boolean; onClose: () => void; user: any; activeRoute?: string;
+function ProviderDrawer({ visible, onClose, user, activeRoute = "dashboard" }: {
+  visible:boolean; onClose:()=>void; user:any; activeRoute?:string;
 }) {
   const slideAnim = useRef(new Animated.Value(-320)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -64,21 +54,16 @@ function ProviderDrawer({
   useEffect(() => {
     if (visible) {
       Animated.parallel([
-        Animated.spring(slideAnim, { toValue: 0,    useNativeDriver: true, damping: 20, stiffness: 200 }),
-        Animated.timing(fadeAnim,  { toValue: 1,    duration: 250, useNativeDriver: true }),
+        Animated.spring(slideAnim, { toValue:0,    useNativeDriver:true, damping:20, stiffness:200 }),
+        Animated.timing(fadeAnim,  { toValue:1,    duration:250, useNativeDriver:true }),
       ]).start();
     } else {
       Animated.parallel([
-        Animated.timing(slideAnim, { toValue: -320, duration: 220, useNativeDriver: true }),
-        Animated.timing(fadeAnim,  { toValue: 0,    duration: 200, useNativeDriver: true }),
+        Animated.timing(slideAnim, { toValue:-320, duration:220, useNativeDriver:true }),
+        Animated.timing(fadeAnim,  { toValue:0,    duration:200, useNativeDriver:true }),
       ]).start();
     }
   }, [visible]);
-
-  const handleNav = (route: string) => {
-    onClose();
-    setTimeout(() => router.push(route as any), 250);
-  };
 
   const handleLogout = async () => {
     onClose();
@@ -88,118 +73,65 @@ function ProviderDrawer({
 
   const firstName = user?.first_name ?? "Provider";
   const lastName  = user?.last_name  ?? "";
-  const email     = user?.email      ?? "provider@snapfix.com";
-  const initials  = `${firstName[0] ?? "P"}${lastName[0] ?? ""}`.toUpperCase();
+  const email     = user?.email      ?? "";
+  const initials  = `${firstName[0]??'P'}${lastName[0]??''}`.toUpperCase();
 
   if (!visible) return null;
 
   return (
-    <Modal transparent visible={visible} animationType="none" onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1 }}>
-        {/* Backdrop */}
-        <Animated.View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.65)", opacity: fadeAnim }}>
-          <Pressable style={{ flex: 1 }} onPress={onClose} />
+    <Modal transparent visible animationType="none" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex:1 }}>
+        <Animated.View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor:"rgba(0,0,0,0.65)", opacity:fadeAnim }}>
+          <Pressable style={{ flex:1 }} onPress={onClose} />
         </Animated.View>
-
-        {/* Drawer panel */}
-        <Animated.View style={{
-          position: "absolute", top: 0, left: 0, bottom: 0, width: 300,
-          backgroundColor: "#0F172A",
-          transform: [{ translateX: slideAnim }],
-          shadowColor: "#000", shadowOffset: { width: 8, height: 0 }, shadowOpacity: 0.4, shadowRadius: 24, elevation: 20,
-        }}>
-          {/* Decorative blobs */}
-          <View style={{ position: "absolute", top: -40, right: -40, width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(6,182,212,0.06)" }} />
-          <View style={{ position: "absolute", bottom: 60, left: -30, width: 120, height: 120, borderRadius: 60, backgroundColor: "rgba(59,130,246,0.05)" }} />
-
-          {/* Header */}
-          <LinearGradient colors={["#0F172A", "#1E293B"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={{ paddingTop: Platform.OS === "android" ? 52 : 60, paddingBottom: 28, paddingHorizontal: 20, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" }}
-          >
-            {/* Close btn */}
-            <TouchableOpacity onPress={onClose} style={{ position: "absolute", top: Platform.OS === "android" ? 48 : 56, right: 16, width: 34, height: 34, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" }}>
+        <Animated.View style={{ position:"absolute", top:0, left:0, bottom:0, width:300, backgroundColor:"#0F172A", transform:[{translateX:slideAnim}], shadowColor:"#000", shadowOffset:{width:8,height:0}, shadowOpacity:0.4, shadowRadius:24, elevation:20 }}>
+          <View style={{ position:"absolute", top:-40, right:-40, width:160, height:160, borderRadius:80, backgroundColor:"rgba(6,182,212,0.06)" }} />
+          <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:1}}
+            style={{ paddingTop:Platform.OS==="android"?52:60, paddingBottom:28, paddingHorizontal:20, borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.06)" }}>
+            <TouchableOpacity onPress={onClose} style={{ position:"absolute", top:Platform.OS==="android"?48:56, right:16, width:34, height:34, borderRadius:10, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}>
               <X size={17} color="rgba(255,255,255,0.7)" />
             </TouchableOpacity>
-
-            {/* Avatar — tappable → profile */}
-            <TouchableOpacity
-              onPress={() => { onClose(); setTimeout(() => router.push("/(provider)/profile" as any), 250); }}
-              style={{ width: 62, height: 62, borderRadius: 20, backgroundColor: "rgba(6,182,212,0.2)", alignItems: "center", justifyContent: "center", marginBottom: 14, borderWidth: 2, borderColor: "rgba(6,182,212,0.35)" }}
-            >
-              <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 22, color: "#06B6D4" }}>{initials}</Text>
-            </TouchableOpacity>
-
-            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 17, color: "#fff", marginBottom: 3 }}>{firstName} {lastName}</Text>
-            <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "rgba(255,255,255,0.4)", marginBottom: 12 }}>{email}</Text>
-
-            {/* Badges */}
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              <View style={{ backgroundColor: "rgba(6,182,212,0.15)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "rgba(6,182,212,0.25)" }}>
-                <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 11, color: "#06B6D4" }}>🔧 Provider</Text>
+            <View style={{ width:62, height:62, borderRadius:20, backgroundColor:"rgba(6,182,212,0.2)", alignItems:"center", justifyContent:"center", marginBottom:14, borderWidth:2, borderColor:"rgba(6,182,212,0.35)" }}>
+              <Text style={{ fontFamily:Typography.fonts.bold, fontSize:22, color:"#06B6D4" }}>{initials}</Text>
+            </View>
+            <Text style={{ fontFamily:Typography.fonts.bold, fontSize:17, color:"#fff", marginBottom:3 }}>{firstName} {lastName}</Text>
+            <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"rgba(255,255,255,0.4)", marginBottom:12 }}>{email}</Text>
+            <View style={{ flexDirection:"row", gap:8 }}>
+              <View style={{ backgroundColor:"rgba(6,182,212,0.15)", paddingHorizontal:12, paddingVertical:5, borderRadius:20, borderWidth:1, borderColor:"rgba(6,182,212,0.25)" }}>
+                <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:11, color:"#06B6D4" }}>🔧 Provider</Text>
               </View>
-              <View style={{ backgroundColor: "rgba(16,185,129,0.15)", paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20, borderWidth: 1, borderColor: "rgba(16,185,129,0.25)" }}>
-                <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 11, color: "#10B981" }}>✓ Verified</Text>
+              <View style={{ backgroundColor:"rgba(16,185,129,0.15)", paddingHorizontal:12, paddingVertical:5, borderRadius:20, borderWidth:1, borderColor:"rgba(16,185,129,0.25)" }}>
+                <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:11, color:"#10B981" }}>✓ Verified</Text>
               </View>
             </View>
           </LinearGradient>
-
-          <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop: 16, paddingBottom: 20 }}>
-            {/* Section label */}
-            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: 1.3, marginLeft: 20, marginBottom: 8 }}>NAVIGATION</Text>
-
+          <ScrollView style={{ flex:1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingTop:16, paddingBottom:20 }}>
+            <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:10, color:"rgba(255,255,255,0.25)", letterSpacing:1.3, marginLeft:20, marginBottom:8 }}>NAVIGATION</Text>
             {DRAWER_MAIN.map((item) => {
               const isActive = activeRoute === item.id;
               return (
-                <TouchableOpacity key={item.id} onPress={() => handleNav(item.route)} activeOpacity={0.75}
-                  style={{ flexDirection: "row", alignItems: "center", marginHorizontal: 12, marginBottom: 3, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: isActive ? item.color + "18" : "transparent" }}
-                >
-                  {isActive && <View style={{ position: "absolute", left: 0, top: 10, bottom: 10, width: 3, borderRadius: 2, backgroundColor: item.color }} />}
-                  <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: isActive ? item.color + "22" : "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center", marginRight: 13 }}>
-                    <item.icon size={17} color={isActive ? item.color : "rgba(255,255,255,0.45)"} />
+                <TouchableOpacity key={item.id} onPress={() => { onClose(); setTimeout(() => router.push(item.route as any), 250); }} activeOpacity={0.75}
+                  style={{ flexDirection:"row", alignItems:"center", marginHorizontal:12, marginBottom:3, paddingVertical:12, paddingHorizontal:14, borderRadius:14, backgroundColor:isActive?item.color+"18":"transparent" }}>
+                  {isActive && <View style={{ position:"absolute", left:0, top:10, bottom:10, width:3, borderRadius:2, backgroundColor:item.color }} />}
+                  <View style={{ width:36, height:36, borderRadius:11, backgroundColor:isActive?item.color+"22":"rgba(255,255,255,0.06)", alignItems:"center", justifyContent:"center", marginRight:13 }}>
+                    <item.icon size={17} color={isActive?item.color:"rgba(255,255,255,0.45)"} />
                   </View>
-                  <Text style={{ fontFamily: isActive ? Typography.fonts.semibold : Typography.fonts.medium, fontSize: 14, color: isActive ? item.color : "rgba(255,255,255,0.65)", flex: 1 }}>
-                    {item.label}
-                  </Text>
-                  {isActive && <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: item.color }} />}
+                  <Text style={{ fontFamily:isActive?Typography.fonts.semibold:Typography.fonts.medium, fontSize:14, color:isActive?item.color:"rgba(255,255,255,0.65)", flex:1 }}>{item.label}</Text>
+                  {isActive && <View style={{ width:6, height:6, borderRadius:3, backgroundColor:item.color }} />}
                 </TouchableOpacity>
               );
             })}
-
-            {/* Divider */}
-            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginHorizontal: 20, marginTop: 12, marginBottom: 16 }} />
-
-            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: 1.3, marginLeft: 20, marginBottom: 8 }}>MORE</Text>
-
-            {DRAWER_BOTTOM.map((item) => (
-              <TouchableOpacity key={item.id} onPress={() => handleNav(item.route)} activeOpacity={0.75}
-                style={{ flexDirection: "row", alignItems: "center", marginHorizontal: 12, marginBottom: 3, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 14 }}
-              >
-                <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center", marginRight: 13 }}>
-                  <item.icon size={16} color="rgba(255,255,255,0.3)" />
-                </View>
-                <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 14, color: "rgba(255,255,255,0.45)" }}>{item.label}</Text>
-              </TouchableOpacity>
-            ))}
-
-            {/* Divider */}
-            <View style={{ height: 1, backgroundColor: "rgba(255,255,255,0.06)", marginHorizontal: 20, marginTop: 12, marginBottom: 16 }} />
-
-            {/* Logout */}
+            <View style={{ height:1, backgroundColor:"rgba(255,255,255,0.06)", marginHorizontal:20, marginTop:12, marginBottom:16 }} />
             <TouchableOpacity onPress={handleLogout} activeOpacity={0.75}
-              style={{ flexDirection: "row", alignItems: "center", marginHorizontal: 12, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "rgba(239,68,68,0.1)" }}
-            >
-              <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: "rgba(239,68,68,0.15)", alignItems: "center", justifyContent: "center", marginRight: 13 }}>
+              style={{ flexDirection:"row", alignItems:"center", marginHorizontal:12, paddingVertical:12, paddingHorizontal:14, borderRadius:14, backgroundColor:"rgba(239,68,68,0.1)" }}>
+              <View style={{ width:36, height:36, borderRadius:11, backgroundColor:"rgba(239,68,68,0.15)", alignItems:"center", justifyContent:"center", marginRight:13 }}>
                 <LogOut size={16} color="#EF4444" />
               </View>
-              <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 14, color: "#EF4444" }}>Sign Out</Text>
+              <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:14, color:"#EF4444" }}>Sign Out</Text>
             </TouchableOpacity>
           </ScrollView>
-
-          {/* Footer */}
-          <View style={{ paddingHorizontal: 20, paddingBottom: Platform.OS === "android" ? 20 : 32, paddingTop: 12, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)" }}>
-            <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "rgba(255,255,255,0.2)", textAlign: "center" }}>
-              SnapFix v1.0.0 · Provider App 🇪🇬
-            </Text>
+          <View style={{ paddingHorizontal:20, paddingBottom:Platform.OS==="android"?20:32, paddingTop:12, borderTopWidth:1, borderTopColor:"rgba(255,255,255,0.06)" }}>
+            <Text style={{ fontFamily:Typography.fonts.regular, fontSize:11, color:"rgba(255,255,255,0.2)", textAlign:"center" }}>SnapFix v1.0.0 · Provider App 🇪🇬</Text>
           </View>
         </Animated.View>
       </View>
@@ -207,307 +139,440 @@ function ProviderDrawer({
   );
 }
 
-/* ─── Mock Data ───────────────────────────────────────────────────── */
-const STATS = [
-  { label: "Today's Earnings", value: "0 EGP",  icon: DollarSign,  color: "#10B981", bg: "rgba(16,185,129,0.12)"  },
-  { label: "Jobs Done",        value: "0",       icon: CheckCircle, color: "#3B82F6", bg: "rgba(59,130,246,0.12)"  },
-  { label: "Rating",           value: "—",       icon: Star,        color: "#F59E0B", bg: "rgba(245,158,11,0.12)"  },
-  { label: "Response Rate",    value: "—",       icon: ThumbsUp,    color: "#8B5CF6", bg: "rgba(139,92,246,0.12)"  },
-];
+/* ─── Pick feedback modal ─────────────────────────────────────────── */
+function FeedbackModal({ data, onClose }: { data:{title:string;msg:string;ok:boolean}|null; onClose:()=>void }) {
+  if (!data) return null;
+  const emoji      = data.ok ? "✅" : data.title.includes("Active") ? "🚧" : data.title.includes("Available") ? "😔" : "⚠️";
+  const headerBg   = data.ok ? "#10B981" : data.title.includes("Active") ? "#F59E0B" : "#EF4444";
+  const boxBg      = data.ok ? "#ECFDF5" : data.title.includes("Active") ? "#FFFBEB" : "#FEF2F2";
+  const boxBorder  = data.ok ? "#A7F3D0" : data.title.includes("Active") ? "#FDE68A" : "#FECACA";
+  const textColor  = data.ok ? "#065F46" : data.title.includes("Active") ? "#92400E" : "#991B1B";
+  const btnColor   = data.ok ? "#10B981" : data.title.includes("Active") ? "#F59E0B" : "#EF4444";
 
-const JOB_REQUESTS = [
-  { id:"1", customerName:"Sara Ahmed",  customerAvatar:"SA", avatarColor:"#EC4899", service:"AC Repair",  emoji:"❄️", address:"Dokki, Giza",   distance:"2.3 km", price:"250 EGP", urgency:"urgent" as const, postedAt:"2 min ago", timer:45  },
-  { id:"2", customerName:"Omar Khalil", customerAvatar:"OK", avatarColor:"#3B82F6", service:"Electrical", emoji:"⚡", address:"Maadi, Cairo", distance:"4.1 km", price:"180 EGP", urgency:"normal" as const, postedAt:"8 min ago", timer:120 },
-];
-
-const RECENT_JOBS = [
-  { id:"1", service:"Plumbing",   customer:"Ahmed M.", price:"320 EGP", date:"Today, 10:30 AM", emoji:"🔧" },
-  { id:"2", service:"Electrical", customer:"Sara K.",  price:"200 EGP", date:"Today, 8:00 AM",  emoji:"⚡" },
-  { id:"3", service:"AC Repair",  customer:"Mona S.",  price:"450 EGP", date:"Yesterday, 3 PM", emoji:"❄️" },
-];
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.55)", justifyContent:"center", paddingHorizontal:24 }}>
+        <View style={{ backgroundColor:"#fff", borderRadius:24, overflow:"hidden", shadowColor:"#000", shadowOffset:{width:0,height:12}, shadowOpacity:0.2, shadowRadius:32, elevation:16 }}>
+          {/* Colored header */}
+          <View style={{ backgroundColor:headerBg, paddingVertical:28, alignItems:"center" }}>
+            <Text style={{ fontSize:44 }}>{emoji}</Text>
+          </View>
+          <View style={{ padding:24 }}>
+            {/* Title */}
+            <Text style={{ fontFamily:Typography.fonts.bold, fontSize:18, color:"#0F172A", marginBottom:12, textAlign:"center" }}>
+              {data.title}
+            </Text>
+            {/* Message box */}
+            <View style={{ backgroundColor:boxBg, borderRadius:14, padding:16, borderWidth:1.5, borderColor:boxBorder, marginBottom:20 }}>
+              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:14, color:textColor, lineHeight:22, textAlign:"center" }}>
+                {data.msg}
+              </Text>
+            </View>
+            {/* Button */}
+            <TouchableOpacity onPress={onClose} activeOpacity={0.88}
+              style={{ paddingVertical:15, borderRadius:16, backgroundColor:btnColor, alignItems:"center" }}>
+              <Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#fff" }}>
+                {data.ok ? "Go to Jobs →" : "OK, Got it"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 /* ══════════════════════════════════════════════════════════════════
    MAIN DASHBOARD
 ══════════════════════════════════════════════════════════════════ */
 export default function ProviderDashboard() {
-  const [isOnline,    setIsOnline]    = useState(false);
-  const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [drawerOpen,  setDrawerOpen]  = useState(false);
+  const token   = useAuthStore((s) => s.token);
+  const user    = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
 
-  const r    = useR();
-  const user = useAuthStore((s) => s.user);
+  const [isOnline,   setIsOnline]   = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [loading,    setLoading]    = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [profile,    setProfile]    = useState<any>(null);
+  const [openJobs,   setOpenJobs]   = useState<ServiceRequest[]>([]);
+  const [recentJobs, setRecentJobs] = useState<ServiceRequest[]>([]);
+  const [feedback,   setFeedback]   = useState<{title:string;msg:string;ok:boolean}|null>(null);
+  const [picking,    setPicking]    = useState<string|null>(null);
 
-  const firstName = user?.first_name ?? "Provider";
+  const r = useR();
+
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (!token) return;
+    isRefresh ? setRefreshing(true) : setLoading(true);
+    try {
+      const [prof, open, jobs] = await Promise.all([
+        getProviderProfile(token),
+        getOpenJobs(token),
+        getMyJobs(token),
+      ]);
+      setProfile(prof);
+      setUser({ ...prof, role:"provider" } as any);
+      setOpenJobs(open);
+      // Recent = last 3 completed or in-progress jobs
+      setRecentJobs(jobs.filter(j => ["completed","in_progress","confirmed"].includes(j.status)).slice(0, 3));
+    } catch (err: any) {
+      console.log("[Dashboard]", err?.data ?? err?.message);
+    } finally { setLoading(false); setRefreshing(false); }
+  }, [token]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handlePick = async (id: string) => {
+    if (!token) return;
+    setPicking(id);
+    try {
+      await pickJob(id, token);
+      setOpenJobs(p => p.filter(j => j.id !== id));
+      setFeedback({
+        title: "Job Picked!",
+        msg:   "The job is now in your Incoming tab. Go to Jobs and tap Accept to confirm it.",
+        ok:    true,
+      });
+    } catch (err: any) {
+      const status = err?.status;
+      const d      = err?.data ?? {};
+
+      console.log("[Pick error]", JSON.stringify({ status, data: d }));
+
+      // API returns errors as strings OR arrays — handle both
+      const pickFirst = (v: any): string => {
+        if (!v) return "";
+        if (Array.isArray(v)) return v[0] ?? "";
+        if (typeof v === "string") return v;
+        return String(v);
+      };
+
+      const raw =
+        pickFirst(d?.detail) ||
+        pickFirst(d?.non_field_errors) ||
+        pickFirst(d?.error) ||
+        pickFirst(d?.message) ||
+        (typeof d === "string" ? d : "") ||
+        pickFirst(err?.message) ||
+        "";
+
+      let title = "Cannot Pick Job";
+      let msg   = raw;
+
+      if (status === 404) {
+        title = "Job No Longer Available \u{1F625}";
+        msg   = "Another provider just picked this job. Try a different one.";
+      } else if (status === 400) {
+        const lower = (raw ?? "").toLowerCase();
+        if (lower.includes("active") || lower.includes("already") || lower.includes("current")) {
+          title = "You Already Have an Active Job";
+          msg   = "You can only hold one active job at a time.\n\nFinish or cancel your current job first, then pick a new one.";
+        } else if (lower.includes("verified")) {
+          title = "Account Not Verified";
+          msg   = "Your account must be verified before you can pick jobs.";
+        } else {
+          title = "Cannot Pick This Job";
+          msg   = raw || "This job cannot be picked right now. Please try again.";
+        }
+      } else if (status === 401) {
+        title = "Session Expired";
+        msg   = "Please log out and log back in.";
+      } else {
+        title = "Something Went Wrong";
+        msg   = raw || "Could not pick this job. Pull down to refresh and try again.";
+      }
+
+      setFeedback({ title, msg, ok: false });
+    } finally { setPicking(null); }
+  };
+
+  const firstName = (user as any)?.first_name ?? profile?.first_name ?? "Provider";
   const h         = new Date().getHours();
   const greeting  = h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 
   const centerWrap: any = r.isWeb
-    ? { maxWidth: r.maxW, width: "100%", alignSelf: "center", paddingHorizontal: r.px }
-    : { paddingHorizontal: r.px };
+    ? { maxWidth:r.maxW, width:"100%", alignSelf:"center", paddingHorizontal:r.px }
+    : { paddingHorizontal:r.px };
+
+  /* ── Stats from real profile ── */
+  const STATS = [
+    { label:"Total Earnings",   value: profile ? `${parseFloat(profile.total_earnings??'0').toFixed(0)} EGP` : "—",  icon:DollarSign,  color:"#10B981", bg:"rgba(16,185,129,0.12)" },
+    { label:"Jobs Completed",   value: profile?.completed_jobs ?? "—",                                                icon:CheckCircle, color:"#3B82F6", bg:"rgba(59,130,246,0.12)" },
+    { label:"Rating",           value: profile?.average_rating ? `${parseFloat(profile.average_rating).toFixed(1)}★` : "—",  icon:Star, color:"#F59E0B", bg:"rgba(245,158,11,0.12)"  },
+    { label:"Completion Rate",  value: profile?.completion_rate ? `${profile.completion_rate}%` : "—",               icon:ThumbsUp,    color:"#8B5CF6", bg:"rgba(139,92,246,0.12)"  },
+  ];
+
+  const statusColor: Record<string,string> = {
+    completed:"#10B981", in_progress:"#06B6D4", confirmed:"#8B5CF6",
+    assigned:"#3B82F6", pending:"#F59E0B", cancelled:"#EF4444",
+  };
+  const statusLabel: Record<string,string> = {
+    completed:"Completed", in_progress:"In Progress", confirmed:"Confirmed",
+    assigned:"Assigned", pending:"Pending", cancelled:"Cancelled",
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+    <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      {/* ── Drawer ── */}
-      <ProviderDrawer
-        visible={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        user={user}
-        activeRoute="dashboard"
-      />
+      <ProviderDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} activeRoute="dashboard" />
+      <FeedbackModal data={feedback} onClose={() => { setFeedback(null); if (feedback?.ok) router.push("/(provider)/jobs" as any); }} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:110 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} tintColor="#06B6D4" colors={["#06B6D4"]} />}>
 
         {/* ══ HEADER ══ */}
-        <LinearGradient
-          colors={["#0F172A", "#1E293B", "#0F172A"]}
-          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-          style={{ paddingTop: Platform.OS === "web" ? 28 : 52, paddingBottom: 32, borderBottomLeftRadius: r.isWeb ? 0 : 32, borderBottomRightRadius: r.isWeb ? 0 : 32, overflow: "hidden" }}
-        >
+        <LinearGradient colors={["#0F172A","#1E293B","#0F172A"]} start={{x:0,y:0}} end={{x:1,y:1}}
+          style={{ paddingTop:Platform.OS==="web"?28:52, paddingBottom:32, borderBottomLeftRadius:r.isWeb?0:32, borderBottomRightRadius:r.isWeb?0:32, overflow:"hidden" }}>
           <View style={{ position:"absolute", top:-60, right:-60, width:200, height:200, borderRadius:100, backgroundColor:"rgba(6,182,212,0.08)" }} />
-          <View style={{ position:"absolute", bottom:-40, left:-40, width:160, height:160, borderRadius:80, backgroundColor:"rgba(59,130,246,0.06)" }} />
-
           <View style={centerWrap}>
             <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:24 }}>
               <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
-                {/* ── Hamburger ── */}
-                <View >
-                  <TouchableOpacity
-                    onPress={() => setDrawerOpen(true)}
-                    style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}
-                  >
-                    <Menu size={22} color="#fff" />
-                  </TouchableOpacity>
-                </View>
-
-                <View >
-                  <TouchableOpacity onPress={() => router.push("/(provider)/profile" as any)}>
-                    <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(13), color:"rgba(255,255,255,0.5)", marginBottom:2 }}>{greeting}, 👷</Text>
-                    <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize:r.fs(22), color:"#fff", lineHeight:28 }}>{firstName}</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Bell */}
-              <View >
-                <TouchableOpacity style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}>
-                  <Bell size={20} color="#fff" />
-                  <View style={{ position:"absolute", top:9, right:9, width:8, height:8, borderRadius:4, backgroundColor:"#06B6D4", borderWidth:1.5, borderColor:"#0F172A" }} />
+                <TouchableOpacity onPress={() => setDrawerOpen(true)}
+                  style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}>
+                  <Menu size={22} color="#fff" />
                 </TouchableOpacity>
+                <View>
+                  <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(13), color:"rgba(255,255,255,0.5)", marginBottom:2 }}>{greeting}, 👷</Text>
+                  <Text style={{ fontFamily:Typography.fonts.extrabold, fontSize:r.fs(22), color:"#fff", lineHeight:28 }}>{firstName}</Text>
+                </View>
               </View>
+              <TouchableOpacity onPress={() => fetchData(true)}
+                style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}>
+                <RefreshCw size={18} color="#fff" />
+              </TouchableOpacity>
             </View>
 
-            {/* ── ONLINE TOGGLE CARD ── */}
-            <View >
-              <View style={{ backgroundColor:"rgba(255,255,255,0.06)", borderRadius:20, padding:20, borderWidth:1, borderColor: isOnline ? "rgba(6,182,212,0.4)" : "rgba(255,255,255,0.08)" }}>
-                <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
-                  <View style={{ flex:1 }}>
-                    <View style={{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:4 }}>
-                      <View style={{ width:10, height:10, borderRadius:5, backgroundColor: isOnline ? "#06B6D4" : "#475569" }}
-                      />
-                      <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(16), color: isOnline ? "#06B6D4" : "#94A3B8" }}>
-                        {isOnline ? "Online" : "Offline"}
-                      </Text>
-                    </View>
-                    <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(12), color:"rgba(255,255,255,0.45)", lineHeight:18 }}>
-                      {isOnline ? "You're receiving job requests" : "Toggle on to start receiving jobs"}
+            {/* Online toggle */}
+            <View style={{ backgroundColor:"rgba(255,255,255,0.06)", borderRadius:20, padding:20, borderWidth:1, borderColor:isOnline?"rgba(6,182,212,0.4)":"rgba(255,255,255,0.08)" }}>
+              <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
+                <View style={{ flex:1 }}>
+                  <View style={{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:4 }}>
+                    <View style={{ width:10, height:10, borderRadius:5, backgroundColor:isOnline?"#06B6D4":"#475569" }} />
+                    <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(16), color:isOnline?"#06B6D4":"#94A3B8" }}>
+                      {isOnline ? "Online" : "Offline"}
                     </Text>
                   </View>
-                  <Switch
-                    value={isOnline} onValueChange={setIsOnline}
-                    trackColor={{ false:"#334155", true:"#06B6D4" }}
-                    thumbColor={isOnline ? "#fff" : "#94A3B8"}
-                    ios_backgroundColor="#334155"
-                    style={{ transform:[{scaleX:1.1},{scaleY:1.1}] }}
-                  />
+                  <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(12), color:"rgba(255,255,255,0.45)", lineHeight:18 }}>
+                    {isOnline ? "You're visible to customers" : "Toggle on to start receiving jobs"}
+                  </Text>
                 </View>
-
-                {isOnline && (
-                  <View style={{ marginTop:16, paddingTop:16, borderTopWidth:1, borderTopColor:"rgba(255,255,255,0.08)", flexDirection:"row", justifyContent:"space-around" }}
-                  >
-                    {[
-                      { label:"Today",      value:"0 EGP", icon:DollarSign },
-                      { label:"Active Jobs",value:"0",     icon:Briefcase  },
-                      { label:"In Queue",   value:`${JOB_REQUESTS.length}`, icon:Clock },
-                    ].map((item) => (
-                      <View key={item.label} style={{ alignItems:"center" }}>
-                        <item.icon size={16} color="#06B6D4" style={{ marginBottom:4 }} />
-                        <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(15), color:"#fff" }}>{item.value}</Text>
-                        <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(10), color:"rgba(255,255,255,0.4)" }}>{item.label}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
+                <Switch value={isOnline} onValueChange={setIsOnline}
+                  trackColor={{ false:"#334155", true:"#06B6D4" }}
+                  thumbColor={isOnline?"#fff":"#94A3B8"}
+                  ios_backgroundColor="#334155" />
               </View>
+
+              {isOnline && (
+                <View style={{ marginTop:16, paddingTop:16, borderTopWidth:1, borderTopColor:"rgba(255,255,255,0.08)", flexDirection:"row", justifyContent:"space-around" }}>
+                  {[
+                    { label:"Balance",   value: profile ? `${parseFloat(profile.available_balance??'0').toFixed(0)} EGP` : "—", icon:Wallet   },
+                    { label:"Total Jobs",value: profile?.total_jobs ?? "—",    icon:Briefcase },
+                    { label:"Open Pool", value: openJobs.length,               icon:Clock     },
+                  ].map(item => (
+                    <View key={item.label} style={{ alignItems:"center" }}>
+                      <item.icon size={16} color="#06B6D4" style={{ marginBottom:4 }} />
+                      <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(15), color:"#fff" }}>{item.value}</Text>
+                      <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(10), color:"rgba(255,255,255,0.4)" }}>{item.label}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           </View>
         </LinearGradient>
 
-        {/* ══ BODY ══ */}
         <View style={centerWrap}>
 
           {/* STATS */}
-          <View style={{ flexDirection:"row", flexWrap:"wrap", gap:r.gap, marginTop:20 }}
-          >
-            {STATS.map((s, i) => {
-              const wPhone: any = (r.width - r.px * 2 - r.gap) / 2;
-              return (
-                <View key={s.label} style={{ width: r.isWeb ? (r.width - r.px * 2 - r.gap * 3) / 4 : wPhone }}
-                >
-                  <View style={{ backgroundColor:"#fff", borderRadius:20, padding:r.fs(16), shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:10, elevation:3, borderWidth:1, borderColor:"#F1F5F9" }}>
-                    <View style={{ width:40, height:40, borderRadius:14, backgroundColor:s.bg, alignItems:"center", justifyContent:"center", marginBottom:10 }}>
-                      <s.icon size={20} color={s.color} />
+          {loading ? (
+            <View style={{ alignItems:"center", paddingVertical:32 }}>
+              <ActivityIndicator size="large" color="#06B6D4" />
+              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"#94A3B8", marginTop:10 }}>Loading dashboard…</Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection:"row", flexWrap:"wrap", gap:r.gap, marginTop:20 }}>
+              {STATS.map(s => {
+                const wPhone: any = (r.width - r.px * 2 - r.gap) / 2;
+                return (
+                  <View key={s.label} style={{ width: r.isWeb ? (r.width - r.px*2 - r.gap*3)/4 : wPhone }}>
+                    <View style={{ backgroundColor:"#fff", borderRadius:20, padding:r.fs(16), shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:10, elevation:3, borderWidth:1, borderColor:"#F1F5F9" }}>
+                      <View style={{ width:40, height:40, borderRadius:14, backgroundColor:s.bg, alignItems:"center", justifyContent:"center", marginBottom:10 }}>
+                        <s.icon size={20} color={s.color} />
+                      </View>
+                      <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(20), color:"#0F172A", marginBottom:2 }}>{s.value}</Text>
+                      <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(11), color:"#94A3B8", lineHeight:15 }}>{s.label}</Text>
                     </View>
-                    <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(20), color:"#0F172A", marginBottom:2 }}>{s.value}</Text>
-                    <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(11), color:"#94A3B8", lineHeight:15 }}>{s.label}</Text>
                   </View>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
+          )}
 
-          {/* JOB REQUESTS */}
-          {isOnline && (
+          {/* OPEN POOL — shown when online */}
+          {isOnline && !loading && (
             <View style={{ marginTop:28 }}>
               <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
-                  <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(18), color:"#0F172A" }}>New Requests</Text>
-                  {JOB_REQUESTS.length > 0 && (
+                  <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(18), color:"#0F172A" }}>Open Jobs</Text>
+                  {openJobs.length > 0 && (
                     <View style={{ backgroundColor:"#EF4444", width:22, height:22, borderRadius:11, alignItems:"center", justifyContent:"center" }}>
-                      <Text style={{ fontFamily: Typography.fonts.bold, fontSize:11, color:"#fff" }}>{JOB_REQUESTS.length}</Text>
+                      <Text style={{ fontFamily:Typography.fonts.bold, fontSize:11, color:"#fff" }}>{openJobs.length}</Text>
                     </View>
                   )}
                 </View>
+                <TouchableOpacity onPress={() => router.push("/(provider)/jobs" as any)} style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
+                  <Text style={{ fontFamily:Typography.fonts.medium, fontSize:13, color:"#3B82F6" }}>View all</Text>
+                  <ChevronRight size={14} color="#3B82F6" />
+                </TouchableOpacity>
               </View>
 
-              <View style={{ flexDirection:"row", flexWrap:"wrap", gap:r.gap }}>
-                {JOB_REQUESTS.map((job, i) => (
-                  <View key={job.id} style={{ width: (r.isTablet || r.isWeb) ? (r.width - r.px * 2 - r.gap) / 2 : "100%" as any }}
-                  >
-                    <View style={{ backgroundColor:"#fff", borderRadius:20, padding:18, shadowColor:"#1E3A8A", shadowOffset:{width:0,height:4}, shadowOpacity:0.08, shadowRadius:14, elevation:4, borderWidth:1.5, borderColor: job.urgency==="urgent" ? "#FEE2E2" : "#F1F5F9" }}>
-                      {job.urgency === "urgent" && (
-                        <View style={{ flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"#FEF2F2", paddingHorizontal:10, paddingVertical:4, borderRadius:20, alignSelf:"flex-start", marginBottom:12 }}>
-                          <AlertCircle size={12} color="#EF4444" />
-                          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:10, color:"#EF4444" }}>URGENT</Text>
-                        </View>
+              {openJobs.length === 0 ? (
+                <View style={{ backgroundColor:"#fff", borderRadius:20, padding:24, alignItems:"center", borderWidth:1, borderColor:"#F1F5F9" }}>
+                  <Text style={{ fontSize:36, marginBottom:8 }}>🔍</Text>
+                  <Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#0F172A", marginBottom:4 }}>No open jobs right now</Text>
+                  <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"#94A3B8", textAlign:"center" }}>New requests will appear here. Pull down to refresh.</Text>
+                </View>
+              ) : (
+                openJobs.slice(0, 3).map(job => (
+                  <View key={job.id} style={{ backgroundColor:"#fff", borderRadius:20, padding:18, marginBottom:12, shadowColor:"#1E3A8A", shadowOffset:{width:0,height:4}, shadowOpacity:0.08, shadowRadius:14, elevation:4, borderWidth:1.5, borderColor:job.is_urgent?"#FEE2E2":"#F1F5F9" }}>
+                    {job.is_urgent && (
+                      <View style={{ flexDirection:"row", alignItems:"center", gap:5, backgroundColor:"#FEF2F2", paddingHorizontal:10, paddingVertical:4, borderRadius:20, alignSelf:"flex-start", marginBottom:12 }}>
+                        <AlertCircle size={12} color="#EF4444" />
+                        <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:10, color:"#EF4444" }}>URGENT</Text>
+                      </View>
+                    )}
+
+                    {/* Job info */}
+                    <View style={{ flexDirection:"row", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
+                      <View style={{ flex:1, marginRight:10 }}>
+                        <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(15), color:"#0F172A", marginBottom:3 }} numberOfLines={1}>{job.title}</Text>
+                        <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#94A3B8" }}>{job.category?.name}</Text>
+                      </View>
+                      {job.estimated_price && (
+                        <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(15), color:"#10B981" }}>{job.estimated_price} EGP</Text>
                       )}
-                      <View style={{ flexDirection:"row", alignItems:"center", marginBottom:12 }}>
-                        <View style={{ width:44, height:44, borderRadius:14, backgroundColor:job.avatarColor+"22", alignItems:"center", justifyContent:"center", marginRight:12 }}>
-                          <Text style={{ fontFamily: Typography.fonts.bold, fontSize:14, color:job.avatarColor }}>{job.customerAvatar}</Text>
-                        </View>
-                        <View style={{ flex:1 }}>
-                          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:r.fs(14), color:"#0F172A" }}>{job.customerName}</Text>
-                          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(12), color:"#94A3B8" }}>{job.postedAt}</Text>
-                        </View>
-                        <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(16), color:"#10B981" }}>{job.price}</Text>
+                    </View>
+
+                    <View style={{ flexDirection:"row", gap:14, flexWrap:"wrap", marginBottom:14 }}>
+                      {job.region?.name && <View style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
+                        <MapPin size={12} color="#94A3B8" />
+                        <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#64748B" }}>{job.region.name}</Text>
+                      </View>}
+                      <View style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
+                        <Calendar size={12} color="#94A3B8" />
+                        <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#64748B" }}>{job.preferred_date}</Text>
                       </View>
-                      <View style={{ flexDirection:"row", alignItems:"center", gap:8, backgroundColor:"#F8FAFC", borderRadius:12, padding:10, marginBottom:12 }}>
-                        <Text style={{ fontSize:20 }}>{job.emoji}</Text>
-                        <View>
-                          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:r.fs(14), color:"#0F172A" }}>{job.service}</Text>
-                          <View style={{ flexDirection:"row", alignItems:"center", gap:4, marginTop:2 }}>
-                            <MapPin size={11} color="#94A3B8" />
-                            <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(11), color:"#94A3B8" }}>{job.address}</Text>
-                            <Text style={{ color:"#CBD5E1", fontSize:11 }}>·</Text>
-                            <Navigation size={11} color="#3B82F6" />
-                            <Text style={{ fontFamily: Typography.fonts.medium, fontSize:r.fs(11), color:"#3B82F6" }}>{job.distance}</Text>
-                          </View>
-                        </View>
-                      </View>
-                      <View style={{ height:3, backgroundColor:"#F1F5F9", borderRadius:2, marginBottom:14, overflow:"hidden" }}>
-                        <View style={{ height:"100%", backgroundColor: job.urgency==="urgent" ? "#EF4444" : "#06B6D4", borderRadius:2 }}
-                        />
-                      </View>
-                      <View style={{ flexDirection:"row", gap:10 }}>
-                        <TouchableOpacity style={{ flex:1, paddingVertical:11, borderRadius:14, backgroundColor:"#F1F5F9", alignItems:"center" }}>
-                          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:r.fs(13), color:"#64748B" }}>Decline</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={() => setActiveJobId(job.id)}
-                          style={{ flex:2, paddingVertical:11, borderRadius:14, backgroundColor:"#0F172A", alignItems:"center", flexDirection:"row", justifyContent:"center", gap:6 }}
-                        >
-                          <Zap size={14} color="#06B6D4" fill="#06B6D4" />
-                          <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(13), color:"#fff" }}>Accept Job</Text>
-                        </TouchableOpacity>
+                      <View style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
+                        <Clock size={12} color="#94A3B8" />
+                        <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#64748B" }}>{job.preferred_time?.slice(0,5)}</Text>
                       </View>
                     </View>
+
+                    <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"#475569", lineHeight:20, marginBottom:14 }} numberOfLines={2}>{job.description}</Text>
+
+                    <TouchableOpacity onPress={() => handlePick(job.id)} disabled={picking === job.id} activeOpacity={0.88}
+                      style={{ borderRadius:14, overflow:"hidden", opacity:picking===job.id?0.7:1 }}>
+                      <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                        style={{ paddingVertical:12, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:8 }}>
+                        {picking === job.id
+                          ? <ActivityIndicator size="small" color="#06B6D4" />
+                          : <><Zap size={16} color="#06B6D4" fill="#06B6D4" /><Text style={{ fontFamily:Typography.fonts.bold, fontSize:14, color:"#fff" }}>Pick This Job</Text></>
+                        }
+                      </LinearGradient>
+                    </TouchableOpacity>
                   </View>
-                ))}
-              </View>
+                ))
+              )}
             </View>
           )}
 
           {/* OFFLINE NUDGE */}
-          {!isOnline && (
-            <View style={{ marginTop:28, backgroundColor:"#fff", borderRadius:20, padding:24, alignItems:"center", borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:10, elevation:2 }}
-            >
+          {!isOnline && !loading && (
+            <View style={{ marginTop:28, backgroundColor:"#fff", borderRadius:20, padding:24, alignItems:"center", borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:10, elevation:2 }}>
               <Text style={{ fontSize:40, marginBottom:12 }}>😴</Text>
-              <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(16), color:"#0F172A", marginBottom:6, textAlign:"center" }}>You're currently offline</Text>
-              <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(13), color:"#94A3B8", textAlign:"center", lineHeight:20, marginBottom:20 }}>
+              <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(16), color:"#0F172A", marginBottom:6, textAlign:"center" }}>You're currently offline</Text>
+              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(13), color:"#94A3B8", textAlign:"center", lineHeight:20, marginBottom:20 }}>
                 Toggle the switch above to go online{"\n"}and start receiving job requests.
               </Text>
               <TouchableOpacity onPress={() => setIsOnline(true)} style={{ backgroundColor:"#0F172A", paddingHorizontal:28, paddingVertical:12, borderRadius:16 }}>
-                <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(14), color:"#06B6D4" }}>Go Online Now</Text>
+                <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(14), color:"#06B6D4" }}>Go Online Now</Text>
               </TouchableOpacity>
             </View>
           )}
 
           {/* RECENT JOBS */}
-          <View style={{ marginTop:28 }}>
-            <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
-              <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(18), color:"#0F172A" }}>Recent Jobs</Text>
-              <TouchableOpacity style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
-                <Text style={{ fontFamily: Typography.fonts.medium, fontSize:r.fs(13), color:"#3B82F6" }}>View all</Text>
-                <ChevronRight size={14} color="#3B82F6" />
-              </TouchableOpacity>
-            </View>
-            {RECENT_JOBS.map((job, i) => (
-              <View key={job.id} >
-                <TouchableOpacity style={{ backgroundColor:"#fff", borderRadius:18, padding:16, flexDirection:"row", alignItems:"center", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:10, elevation:2, borderWidth:1, borderColor:"#F1F5F9", marginBottom:10 }}>
-                  <View style={{ width:46, height:46, borderRadius:15, backgroundColor:"#F8FAFC", alignItems:"center", justifyContent:"center", marginRight:14 }}>
-                    <Text style={{ fontSize:22 }}>{job.emoji}</Text>
-                  </View>
-                  <View style={{ flex:1 }}>
-                    <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:r.fs(14), color:"#0F172A", marginBottom:2 }}>{job.service}</Text>
-                    <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(12), color:"#94A3B8" }}>{job.customer} · {job.date}</Text>
-                  </View>
-                  <View style={{ alignItems:"flex-end", gap:6 }}>
-                    <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(14), color:"#10B981" }}>{job.price}</Text>
-                    <View style={{ backgroundColor:"#ECFDF5", paddingHorizontal:8, paddingVertical:2, borderRadius:8 }}>
-                      <Text style={{ fontFamily: Typography.fonts.medium, fontSize:10, color:"#10B981" }}>Completed</Text>
-                    </View>
-                  </View>
+          {!loading && (
+            <View style={{ marginTop:28 }}>
+              <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+                <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(18), color:"#0F172A" }}>Recent Jobs</Text>
+                <TouchableOpacity onPress={() => router.push("/(provider)/jobs" as any)} style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
+                  <Text style={{ fontFamily:Typography.fonts.medium, fontSize:r.fs(13), color:"#3B82F6" }}>View all</Text>
+                  <ChevronRight size={14} color="#3B82F6" />
                 </TouchableOpacity>
               </View>
-            ))}
-          </View>
 
-          {/* PERFORMANCE */}
-          <View style={{ marginTop:20, marginBottom:8 }}>
-            <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:1}}
-              style={{ borderRadius:24, padding:24, overflow:"hidden" }}>
-              <View style={{ position:"absolute", top:-30, right:-30, width:120, height:120, borderRadius:60, backgroundColor:"rgba(6,182,212,0.08)" }} />
-              <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-                <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(16), color:"#fff" }}>📈 Your Performance</Text>
-                <View style={{ backgroundColor:"rgba(6,182,212,0.15)", paddingHorizontal:10, paddingVertical:4, borderRadius:20 }}>
-                  <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:11, color:"#06B6D4" }}>This Week</Text>
+              {recentJobs.length === 0 ? (
+                <View style={{ backgroundColor:"#fff", borderRadius:20, padding:24, alignItems:"center", borderWidth:1, borderColor:"#F1F5F9" }}>
+                  <Text style={{ fontSize:36, marginBottom:8 }}>🗂️</Text>
+                  <Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#0F172A", marginBottom:4 }}>No recent jobs</Text>
+                  <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"#94A3B8", textAlign:"center" }}>Your completed and active jobs will appear here.</Text>
                 </View>
-              </View>
-              {[
-                { label:"Completion Rate", value:"—%", color:"#06B6D4" },
-                { label:"Avg. Response",   value:"—",  color:"#3B82F6" },
-                { label:"Customer Rating", value:"—★", color:"#F59E0B" },
-              ].map((item) => (
-                <View key={item.label} style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingVertical:10, borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.05)" }}>
-                  <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
-                    <View style={{ width:6, height:6, borderRadius:3, backgroundColor:item.color }} />
-                    <Text style={{ fontFamily: Typography.fonts.regular, fontSize:r.fs(13), color:"rgba(255,255,255,0.55)" }}>{item.label}</Text>
+              ) : (
+                recentJobs.map(job => (
+                  <TouchableOpacity key={job.id} onPress={() => router.push(`/(provider)/jobs/${job.id}` as any)}
+                    style={{ backgroundColor:"#fff", borderRadius:18, padding:16, flexDirection:"row", alignItems:"center", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.06, shadowRadius:10, elevation:2, borderWidth:1, borderColor:"#F1F5F9", marginBottom:10 }}>
+                    <View style={{ width:46, height:46, borderRadius:15, backgroundColor:"#F8FAFC", alignItems:"center", justifyContent:"center", marginRight:14 }}>
+                      <Briefcase size={20} color="#64748B" />
+                    </View>
+                    <View style={{ flex:1 }}>
+                      <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:r.fs(14), color:"#0F172A", marginBottom:2 }} numberOfLines={1}>{job.title}</Text>
+                      <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(12), color:"#94A3B8" }}>{job.category?.name} · {job.preferred_date}</Text>
+                    </View>
+                    <View style={{ alignItems:"flex-end", gap:6 }}>
+                      {job.final_price && <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(14), color:"#10B981" }}>{job.final_price} EGP</Text>}
+                      <View style={{ backgroundColor:(statusColor[job.status]??'#94A3B8')+"20", paddingHorizontal:8, paddingVertical:2, borderRadius:8 }}>
+                        <Text style={{ fontFamily:Typography.fonts.medium, fontSize:10, color:statusColor[job.status]??'#94A3B8' }}>
+                          {statusLabel[job.status]??job.status}
+                        </Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          )}
+
+          {/* PERFORMANCE CARD */}
+          {!loading && profile && (
+            <View style={{ marginTop:20, marginBottom:8 }}>
+              <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:1}}
+                style={{ borderRadius:24, padding:24, overflow:"hidden" }}>
+                <View style={{ position:"absolute", top:-30, right:-30, width:120, height:120, borderRadius:60, backgroundColor:"rgba(6,182,212,0.08)" }} />
+                <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
+                  <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(16), color:"#fff" }}>📈 Your Performance</Text>
+                  <View style={{ backgroundColor:"rgba(6,182,212,0.15)", paddingHorizontal:10, paddingVertical:4, borderRadius:20 }}>
+                    <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:11, color:"#06B6D4" }}>All Time</Text>
                   </View>
-                  <Text style={{ fontFamily: Typography.fonts.bold, fontSize:r.fs(14), color:item.color }}>{item.value}</Text>
                 </View>
-              ))}
-            </LinearGradient>
-          </View>
+                {[
+                  { label:"Completion Rate", value: profile.completion_rate ? `${profile.completion_rate}%` : "—",                                         color:"#06B6D4" },
+                  { label:"Total Earnings",  value: `${parseFloat(profile.total_earnings??'0').toFixed(2)} EGP`,                                           color:"#10B981" },
+                  { label:"Avg. Rating",     value: profile.average_rating ? `${parseFloat(profile.average_rating).toFixed(1)} ★ (${profile.total_reviews} reviews)` : "No reviews yet", color:"#F59E0B" },
+                  { label:"Available Balance",value:`${parseFloat(profile.available_balance??'0').toFixed(2)} EGP`,                                         color:"#8B5CF6" },
+                ].map(item => (
+                  <View key={item.label} style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingVertical:10, borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.05)" }}>
+                    <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+                      <View style={{ width:6, height:6, borderRadius:3, backgroundColor:item.color }} />
+                      <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(13), color:"rgba(255,255,255,0.55)" }}>{item.label}</Text>
+                    </View>
+                    <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(13), color:item.color }}>{item.value}</Text>
+                  </View>
+                ))}
+              </LinearGradient>
+            </View>
+          )}
 
         </View>
       </ScrollView>

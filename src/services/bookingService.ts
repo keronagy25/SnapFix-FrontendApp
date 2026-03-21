@@ -140,3 +140,20 @@ export const providerCancelJob = (id: string, token: string, reason?: string) =>
     method: "POST",
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
+
+// GET /api/v1/bookings/requests/open/
+// Browse all pending requests available for self-assignment
+export const getOpenJobs = async (token: string): Promise<ServiceRequest[]> => {
+  const res = await apiRequest<Paginated<ServiceRequest>>(
+    "/bookings/requests/open/", { method: "GET" }, token
+  );
+  return res.results ?? [];
+};
+
+// POST /api/v1/bookings/requests/<id>/pick/
+// Provider self-assigns a pending request from the open pool
+// 400 → already has active job | 404 → already picked by someone else
+export const pickJob = (id: string, token: string) =>
+  apiRequest<ServiceRequest>(`/bookings/requests/${id}/pick/`, {
+    method: "POST",
+  }, token);

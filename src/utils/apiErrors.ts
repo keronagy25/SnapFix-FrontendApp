@@ -25,20 +25,33 @@ const FIELD_LABEL: Record<string, string> = {
   estimated_price: "Estimated price", final_price: "Final price",
 };
 
+/** Extract a string from any API error value — handles string, array, or object */
+function pickFirst(v: any): string {
+  if (!v) return "";
+  if (Array.isArray(v)) return v[0] ? String(v[0]) : "";
+  if (typeof v === "string") return v;
+  return String(v);
+}
+
 /** Best single-line message from an ApiError or plain Error */
 export function parseApiError(err: any, fallback = "Something went wrong. Please try again."): string {
   if (!err) return fallback;
   const data   = err?.data ?? {};
   const status = err?.status as number | undefined;
 
-  if (Array.isArray(data?.non_field_errors) && data.non_field_errors.length)
-    return data.non_field_errors[0];
-  if (typeof data?.detail === "string" && data.detail) return data.detail;
+  // non_field_errors — can be array or string
+  const nfe = pickFirst(data?.non_field_errors);
+  if (nfe) return nfe;
 
+  // detail — can be array or string
+  const detail = pickFirst(data?.detail);
+  if (detail) return detail;
+
+  // field-level errors
   for (const [field, val] of Object.entries(data)) {
     if (field === "non_field_errors" || field === "detail") continue;
     const label = FIELD_LABEL[field] ?? field;
-    const msg   = Array.isArray(val) ? val[0] : String(val);
+    const msg   = pickFirst(val);
     if (msg) return label ? `${label}: ${msg}` : msg;
   }
 
