@@ -13,11 +13,12 @@ import {
   Briefcase, AlertCircle, ThumbsUp, Navigation,
   Menu, X, Home, BookOpen, User, Settings,
   HelpCircle, LogOut, Shield, Wallet, BarChart2,
-  MessageCircle, RefreshCw, Calendar,
+  MessageCircle, RefreshCw, Calendar, Building2,
 } from "lucide-react-native";
 import { useAuthStore }       from "@/store/authStore";
 import { Typography }         from "@/theme/typography";
 import { getProviderProfile } from "@/services/providerService";
+import { extractApiMessage } from "@/services/api";
 import { getOpenJobs, getMyJobs, pickJob, type ServiceRequest } from "@/services/bookingService";
 
 /* ─── Responsive ──────────────────────────────────────────────────── */
@@ -42,6 +43,7 @@ const DRAWER_MAIN = [
   { id:"wallet",    label:"Wallet",     icon:Wallet,        route:"/(provider)/wallet",    color:"#F59E0B" },
   { id:"chat",      label:"Messages",   icon:MessageCircle, route:"/(provider)/chat",      color:"#8B5CF6" },
   { id:"profile",   label:"My Profile", icon:User,          route:"/(provider)/profile",   color:"#64748B" },
+  { id:"offices",   label:"Our Offices", icon:Building2,     route:"/(provider)/offices",   color:"#06B6D4" },
 ];
 
 function ProviderDrawer({ visible, onClose, user, activeRoute = "dashboard" }: {
@@ -240,22 +242,10 @@ export default function ProviderDashboard() {
 
       console.log("[Pick error]", JSON.stringify({ status, data: d }));
 
-      // API returns errors as strings OR arrays — handle both
-      const pickFirst = (v: any): string => {
-        if (!v) return "";
-        if (Array.isArray(v)) return v[0] ?? "";
-        if (typeof v === "string") return v;
-        return String(v);
-      };
-
-      const raw =
-        pickFirst(d?.detail) ||
-        pickFirst(d?.non_field_errors) ||
-        pickFirst(d?.error) ||
-        pickFirst(d?.message) ||
-        (typeof d === "string" ? d : "") ||
-        pickFirst(err?.message) ||
-        "";
+      // extractApiMessage handles: array, object {detail/non_field_errors}, string
+      const raw = extractApiMessage(d) !== "Something went wrong."
+        ? extractApiMessage(d)
+        : (err?.message ?? "");
 
       let title = "Cannot Pick Job";
       let msg   = raw;

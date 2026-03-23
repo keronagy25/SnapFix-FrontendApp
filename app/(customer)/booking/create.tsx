@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  TextInput, Alert, Switch, Modal,
+  TextInput, Switch, Modal,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,6 +14,45 @@ import { useAuthStore }  from "@/store/authStore";
 import { Typography }    from "@/theme/typography";
 import { getCategories, getRegions, type Category, type Region } from "@/services/coreService";
 import { createBooking } from "@/services/bookingService";
+
+
+function getApiError(err: any, fallback = "Something went wrong."): string {
+  const tryExtract = (v: any): string => {
+    if (!v) return "";
+    if (Array.isArray(v) && v.length > 0) return String(v[0]);
+    if (typeof v === "string" && v && !v.startsWith("API Error")) return v;
+    if (typeof v === "object" && !Array.isArray(v)) {
+      if (v.detail)           return tryExtract(v.detail);
+      if (v.non_field_errors) return tryExtract(v.non_field_errors);
+      for (const val of Object.values(v)) { const s = tryExtract(val); if (s) return s; }
+    }
+    return "";
+  };
+  return tryExtract(err?.data) || fallback;
+}
+
+function FeedbackModal({ ok, title, msg, onClose }: { ok:boolean; title:string; msg:string; onClose:()=>void }) {
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.5)", justifyContent:"center", paddingHorizontal:24 }}>
+        <View style={{ backgroundColor:"#fff", borderRadius:24, overflow:"hidden" }}>
+          <View style={{ backgroundColor:ok?"#10B981":"#EF4444", paddingVertical:20, alignItems:"center" }}>
+            <Text style={{ fontSize:40 }}>{ok?"✅":"⚠️"}</Text>
+          </View>
+          <View style={{ padding:24, alignItems:"center" }}>
+            <Text style={{ fontFamily:Typography.fonts.bold, fontSize:18, color:"#0F172A", marginBottom:10, textAlign:"center" }}>{title}</Text>
+            <View style={{ backgroundColor:ok?"#ECFDF5":"#FEF2F2", borderRadius:14, padding:14, borderWidth:1, borderColor:ok?"#A7F3D0":"#FECACA", marginBottom:20, width:"100%" }}>
+              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:14, color:ok?"#065F46":"#991B1B", textAlign:"center", lineHeight:22 }}>{msg}</Text>
+            </View>
+            <TouchableOpacity onPress={onClose} style={{ width:"100%", paddingVertical:14, borderRadius:16, backgroundColor:ok?"#10B981":"#0F172A", alignItems:"center" }}>
+              <Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#fff" }}>OK</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
 /* ─── Field wrapper ──────────────────────────────────────────────── */
 function Field({ label, required = false, error, children }: {
@@ -55,79 +94,26 @@ function SelectPill({ selected, onPress, placeholder, hasError }: {
 }
 
 /* ─── Generic picker sheet ───────────────────────────────────────── */
-/* ─── Generic picker sheet ───────────────────────────────────────── */
 function PickerSheet<T extends { id: number; name: string }>({
   visible, items, title, onSelect, onClose,
 }: { visible: boolean; items: T[]; title: string; onSelect: (i: T) => void; onClose: () => void }) {
   if (!visible) return null;
-  
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-      statusBarTranslucent
-    >
-      <View style={{ 
-        flex: 1,
-        backgroundColor: "rgba(0,0,0,0.45)", 
-        justifyContent: "flex-end",
-      }}>
-        <TouchableOpacity 
-          style={{ flex: 1 }} 
-          onPress={onClose} 
-          activeOpacity={1} 
-        />
-        <View style={{ 
-          backgroundColor: "#fff", 
-          borderTopLeftRadius: 28, 
-          borderTopRightRadius: 28, 
-          padding: 20, 
-          maxHeight: "65%", 
-          paddingBottom: Platform.OS === "ios" ? 40 : 24,
-          // Add shadow for better visibility
-          shadowColor: "#000",
-          shadowOffset: { width: 0, height: -3 },
-          shadowOpacity: 0.1,
-          shadowRadius: 5,
-          elevation: 20,
-        }}>
-          <View style={{ 
-            width: 40, 
-            height: 4, 
-            borderRadius: 2, 
-            backgroundColor: "#E2E8F0", 
-            alignSelf: "center", 
-            marginBottom: 16 
-          }} />
-          <Text style={{ 
-            fontFamily: Typography.fonts.bold, 
-            fontSize: 17, 
-            color: "#0F172A", 
-            marginBottom: 14 
-          }}>{title}</Text>
-          <ScrollView showsVerticalScrollIndicator={false}>
-            {items.map((item) => (
-              <TouchableOpacity 
-                key={item.id} 
-                onPress={() => { onSelect(item); onClose(); }}
-                style={{ 
-                  paddingVertical: 14, 
-                  borderBottomWidth: 1, 
-                  borderBottomColor: "#F1F5F9" 
-                }}>
-                <Text style={{ 
-                  fontFamily: Typography.fonts.medium, 
-                  fontSize: 15, 
-                  color: "#0F172A" 
-                }}>{item.name}</Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        </View>
+    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end", zIndex: 999 }}>
+      <TouchableOpacity style={{ flex: 1 }} onPress={onClose} />
+      <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "65%", paddingBottom: Platform.OS === "ios" ? 40 : 24 }}>
+        <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+        <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 17, color: "#0F172A", marginBottom: 14 }}>{title}</Text>
+        <ScrollView showsVerticalScrollIndicator={false}>
+          {items.map((item) => (
+            <TouchableOpacity key={item.id} onPress={() => { onSelect(item); onClose(); }}
+              style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
+              <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 15, color: "#0F172A" }}>{item.name}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
-    </Modal>
+    </View>
   );
 }
 
@@ -356,6 +342,7 @@ export default function BookingCreateScreen() {
   const [loadingData,  setLoadingData]  = useState(true);
   const [errors,       setErrors]       = useState<Record<string, string>>({});
   const [apiError,     setApiError]     = useState<string | null>(null);
+  const [feedback,     setFeedback]     = useState<{ ok:boolean; title:string; msg:string } | null>(null);
 
   const [form, setForm] = useState({
     category_id:    params.category_id ? Number(params.category_id) : 0,
@@ -387,7 +374,7 @@ export default function BookingCreateScreen() {
         setCategories(cats);
         setRegions(regs);
       } catch {
-        Alert.alert("Error", "Failed to load form data. Please go back and try again.");
+        setFeedback({ ok:false, title:"Failed to Load", msg:"Could not load form data. Please go back and try again." });
       } finally {
         setLoadingData(false);
       }
@@ -408,8 +395,8 @@ export default function BookingCreateScreen() {
   };
 
   const handleSubmit = async () => {
-    if (!validate()) { Alert.alert("Required Fields", "Please fill in all required fields."); return; }
-    if (!token)      { Alert.alert("Not logged in", "Please log in again."); return; }
+    if (!validate()) { setFeedback({ ok:false, title:"Required Fields", msg:"Please fill in all required fields before submitting." }); return; }
+    if (!token)      { setFeedback({ ok:false, title:"Not Logged In", msg:"Your session has expired. Please log in again." }); return; }
 
     setSubmitting(true);
     setApiError(null);
@@ -442,11 +429,10 @@ export default function BookingCreateScreen() {
       if (hasInline) {
         setErrors(inline);
         setApiError("Please fix the highlighted fields below.");
-        Alert.alert("Fix Errors", "Please fix the highlighted fields.");
       } else {
-        const msg = d.detail ?? d.non_field_errors?.[0] ?? err?.message ?? "Failed to create booking.";
+        const msg = getApiError(err, "Failed to create booking.");
         setApiError(msg);
-        Alert.alert("Error", msg);
+        setFeedback({ ok:false, title:"Booking Failed", msg });
       }
     } finally {
       setSubmitting(false);
@@ -505,6 +491,7 @@ export default function BookingCreateScreen() {
             <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize:22, color:"#fff" }}>New Booking</Text>
           </View>
         </LinearGradient>
+        {feedback && <FeedbackModal ok={feedback.ok} title={feedback.title} msg={feedback.msg} onClose={() => setFeedback(null)} />}
         <View style={{ flex:1, alignItems:"center", justifyContent:"center" }}>
           <ActivityIndicator size="large" color="#1E3A8A" />
           <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color:"#94A3B8", marginTop:12 }}>Loading form…</Text>
@@ -516,6 +503,7 @@ export default function BookingCreateScreen() {
   return (
     <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+      {feedback && <FeedbackModal ok={feedback.ok} title={feedback.title} msg={feedback.msg} onClose={() => setFeedback(null)} />}
 
       {/* Header */}
       <LinearGradient colors={["#1E3A8A","#1E40AF"]} start={{x:0,y:0}} end={{x:1,y:1}}

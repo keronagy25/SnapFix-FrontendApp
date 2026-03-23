@@ -2,6 +2,10 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "jsx": "react-native",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "moduleResolution": "bundler",
     "baseUrl": ".",
     "paths": {
       "@/*": [
@@ -19,14 +23,14 @@
       "@services/*": [
         "./src/services/*"
       ],
-      "@types/*": [
-        "./src/types/*"
-      ],
       "@theme/*": [
         "./src/theme/*"
       ],
       "@utils/*": [
         "./src/utils/*"
+      ],
+      "@types/*": [
+        "./src/types/*"
       ]
     }
   },

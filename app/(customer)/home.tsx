@@ -11,6 +11,7 @@ import {
   Menu, X, Home, BookOpen, User, Settings,
   HelpCircle, LogOut, Shield, Gift, MessageCircle,
   Zap, Clock, Star,
+  Building2,
 } from "lucide-react-native";
 import { useAuthStore }    from "@/store/authStore";
 import { Typography }      from "@/theme/typography";
@@ -111,6 +112,7 @@ const DRAWER_MAIN = [
   { id: "bookings", label: "My Bookings",    icon: BookOpen,      route: "/(customer)/booking",  color: "#10B981" },
   { id: "chat",     label: "Messages",       icon: MessageCircle, route: "/(customer)/chat",     color: "#06B6D4" },
   { id: "profile",  label: "Profile",        icon: User,          route: "/(customer)/profile",  color: "#8B5CF6" },
+  { id: "offices",  label: "Our Offices",    icon: Building2,     route: "/(customer)/offices",  color: "#06B6D4" },
   { id: "offers",   label: "Offers & Deals", icon: Gift,          route: "/(customer)/offers",   color: "#EC4899" },
   { id: "settings", label: "Settings",       icon: Settings,      route: "/(customer)/settings", color: "#F59E0B" },
 ];

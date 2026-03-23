@@ -106,6 +106,7 @@ export default function CustomerLayout() {
       <Tabs.Screen name="chat"     />
       <Tabs.Screen name="profile"  />
       <Tabs.Screen name="tracking" options={{ href: null }} />
+      <Tabs.Screen name="offices"   options={{ href: null }} />
     </Tabs>
   );
 }

@@ -97,6 +97,7 @@ export default function ProviderLayout() {
       <Tabs.Screen name="wallet"    />
       <Tabs.Screen name="chat"      />
       <Tabs.Screen name="profile"   />
+      <Tabs.Screen name="offices"   options={{ href: null }} />
     </Tabs>
   );
 }

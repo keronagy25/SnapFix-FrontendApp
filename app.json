@@ -6,10 +6,12 @@
     "scheme": "snapfix",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "web": {
       "bundler": "metro",
-      "output":  "single",
+      "output": "single",
       "favicon": "./assets/favicon.png"
     },
     "ios": {
@@ -20,7 +22,10 @@
       "adaptiveIcon": {
         "backgroundColor": "#1E3A8A"
       },
-      "package": "com.snapfix.app"
+      "package": "com.snapfix.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "plugins": [
       "expo-router",
@@ -29,12 +34,18 @@
         "expo-image-picker",
         {
           "photosPermission": "SnapFix needs access to upload documents.",
-          "cameraPermission":  "SnapFix needs camera access."
+          "cameraPermission": "SnapFix needs camera access."
         }
       ]
     ],
     "experiments": {
       "typedRoutes": false
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a4550c39-e113-4512-b197-1284eb10f656"
+      }
     }
   }
 }

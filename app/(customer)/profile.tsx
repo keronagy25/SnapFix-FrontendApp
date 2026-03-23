@@ -9,7 +9,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   User, Mail, Phone, BookOpen, LogOut,
   ChevronRight, AlertCircle, RefreshCw, Settings,
-  HelpCircle, Shield,
+  HelpCircle, Shield, Building2,
 } from "lucide-react-native";
 import { useAuthStore }        from "@/store/authStore";
 import { Typography }          from "@/theme/typography";
@@ -175,6 +175,7 @@ export default function CustomerProfileScreen() {
             <View style={{ backgroundColor: "#fff", borderRadius: 20, paddingHorizontal: 16, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
               <MenuRow icon={BookOpen}   label="My Bookings"   onPress={() => router.push("/(customer)/booking" as any)} />
               <MenuRow icon={Settings}   label="Settings"      onPress={() => {}} />
+              <MenuRow icon={Building2}  label="Our Offices"   onPress={() => router.push("/(customer)/offices" as any)} />
               <MenuRow icon={HelpCircle} label="Help & Support" onPress={() => {}} />
               <MenuRow icon={Shield}     label="Privacy Policy" onPress={() => {}} />
               <MenuRow icon={LogOut}     label="Sign Out"      onPress={handleLogout} danger />
