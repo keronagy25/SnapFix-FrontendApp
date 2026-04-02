@@ -2,18 +2,18 @@ import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  RefreshControl, Alert,
+  RefreshControl, Alert, TextInput, Modal,
 } from "react-native";
 import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   User, Mail, Phone, BookOpen, LogOut,
   ChevronRight, AlertCircle, RefreshCw, Settings,
-  HelpCircle, Shield, Building2,
+  HelpCircle, Shield, Building2, Edit3, X, Save,
 } from "lucide-react-native";
 import { useAuthStore }        from "@/store/authStore";
 import { Typography }          from "@/theme/typography";
-import { getCustomerProfile, type CustomerProfile } from "@/services/customerService";
+import { getCustomerProfile, updateCustomerProfile, type CustomerProfile, type UpdateCustomerPayload } from "@/services/customerService";
 
 function InfoRow({ icon: Icon, label, value, color = "#1E3A8A", last = false }: {
   icon: any; label: string; value: string; color?: string; last?: boolean;
@@ -47,14 +47,51 @@ function MenuRow({ icon: Icon, label, onPress, danger = false }: {
   );
 }
 
+function EditField({ label, value, onChange, keyboardType = "default", error }: {
+  label: string; value: string; onChange: (v: string) => void;
+  keyboardType?: any; error?: string;
+}) {
+  return (
+    <View style={{ marginBottom: 14 }}>
+      <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 12, color: "#64748B", marginBottom: 6 }}>{label}</Text>
+      <TextInput
+        value={value} onChangeText={onChange}
+        keyboardType={keyboardType}
+        style={{
+          fontFamily: Typography.fonts.regular, fontSize: 14, color: "#0F172A",
+          backgroundColor: error ? "#FEF2F2" : "#F8FAFC",
+          borderRadius: 12, borderWidth: 1.5,
+          borderColor: error ? "#FCA5A5" : "#E2E8F0",
+          paddingHorizontal: 14, paddingVertical: 0,
+          height: 48, textAlignVertical: "center",
+        }}
+      />
+      {error && (
+        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#EF4444", marginTop: 4 }}>⚠ {error}</Text>
+      )}
+    </View>
+  );
+}
+
 export default function CustomerProfileScreen() {
   const token    = useAuthStore((s) => s.token);
+  const setUser  = useAuthStore((s) => s.setUser);
   const logout   = useAuthStore((s) => s.logout);
 
   const [profile,    setProfile]    = useState<CustomerProfile | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
+  const [editOpen,   setEditOpen]   = useState(false);
+  const [saving,     setSaving]     = useState(false);
+  const [editErrors, setEditErrors] = useState<Record<string, string>>({});
+
+  const [editForm, setEditForm] = useState({
+    first_name: "",
+    last_name:  "",
+    phone:      "",
+    address:    "",
+  });
 
   const fetchProfile = async (isRefresh = false) => {
     if (!token) return;
@@ -72,6 +109,58 @@ export default function CustomerProfileScreen() {
   };
 
   useEffect(() => { fetchProfile(); }, [token]);
+
+  /* ── open edit ── */
+  const openEdit = () => {
+    setEditForm({
+      first_name: profile?.first_name ?? "",
+      last_name:  profile?.last_name  ?? "",
+      phone:      profile?.phone      ?? "",
+      address:    profile?.address    ?? "",
+    });
+    setEditErrors({});
+    setEditOpen(true);
+  };
+
+  /* ── save ── */
+  const handleSave = async () => {
+    if (!token) return;
+    setSaving(true);
+    setEditErrors({});
+    try {
+      const updated = await updateCustomerProfile(
+        {
+          first_name: editForm.first_name.trim(),
+          last_name:  editForm.last_name.trim(),
+          phone:      editForm.phone.trim(),
+          address:    editForm.address.trim(),
+        } as UpdateCustomerPayload,
+        token,
+      );
+      setProfile(updated);
+      setUser({ ...updated, role: "customer" } as any);
+      setEditOpen(false);
+      Alert.alert("✓ Saved", "Your profile has been updated successfully.");
+    } catch (err: any) {
+      console.log("[ProfileSave]", JSON.stringify(err?.data ?? err));
+      const d = err?.data ?? {};
+      const inline: Record<string, string> = {};
+      const fields = ["first_name", "last_name", "phone", "address"];
+      let hasField = false;
+      for (const f of fields) {
+        if (d[f]) { inline[f] = Array.isArray(d[f]) ? d[f][0] : d[f]; hasField = true; }
+      }
+      if (hasField) {
+        setEditErrors(inline);
+        Alert.alert("Fix Errors", "Please fix the highlighted fields.");
+      } else {
+        const msg = d?.detail ?? d?.non_field_errors?.[0] ?? err?.message ?? "Failed to save profile.";
+        Alert.alert("Save Failed", msg);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const handleLogout = () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -121,6 +210,55 @@ export default function CustomerProfileScreen() {
     <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
 
+      {/* ── Edit Modal ── */}
+      <Modal visible={editOpen} animationType="slide" transparent={false}>
+        <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
+          <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
+          <LinearGradient colors={["#1E3A8A", "#1E40AF"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+            style={{ paddingTop: Platform.OS === "android" ? 48 : 60, paddingBottom: 20, paddingHorizontal: 16, flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}
+          >
+            <TouchableOpacity onPress={() => setEditOpen(false)}
+              style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "rgba(255,255,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+              <X size={20} color="#fff" />
+            </TouchableOpacity>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 16, color: "#fff" }}>Edit Profile</Text>
+            <TouchableOpacity onPress={handleSave} disabled={saving}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: saving ? "#94A3B8" : "rgba(34,197,94,0.9)", paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 }}>
+              <Save size={16} color="#fff" />
+              <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 13, color: "#fff" }}>{saving ? "Saving…" : "Save"}</Text>
+            </TouchableOpacity>
+          </LinearGradient>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 }}>
+            <EditField 
+              label="First Name" 
+              value={editForm.first_name} 
+              onChange={(v) => setEditForm({ ...editForm, first_name: v })}
+              error={editErrors.first_name}
+            />
+            <EditField 
+              label="Last Name" 
+              value={editForm.last_name} 
+              onChange={(v) => setEditForm({ ...editForm, last_name: v })}
+              error={editErrors.last_name}
+            />
+            <EditField 
+              label="Phone" 
+              value={editForm.phone} 
+              onChange={(v) => setEditForm({ ...editForm, phone: v })}
+              keyboardType="phone-pad"
+              error={editErrors.phone}
+            />
+            <EditField 
+              label="Address" 
+              value={editForm.address} 
+              onChange={(v) => setEditForm({ ...editForm, address: v })}
+              error={editErrors.address}
+            />
+          </ScrollView>
+        </View>
+      </Modal>
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: 100 }}
@@ -131,6 +269,15 @@ export default function CustomerProfileScreen() {
           style={{ paddingTop: Platform.OS === "android" ? 48 : 60, paddingBottom: 40, paddingHorizontal: 20, overflow: "hidden" }}
         >
           <View style={{ position: "absolute", top: -30, right: -30, width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(6,182,212,0.08)" }} />
+
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <View style={{ flex: 1 }} />
+            <TouchableOpacity onPress={openEdit}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "rgba(6,182,212,0.2)", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: "rgba(6,182,212,0.4)" }}>
+              <Edit3 size={14} color="#06B6D4" />
+              <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 11, color: "#06B6D4" }}>Edit</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={{ alignItems: "center" }}
           >

@@ -37,6 +37,7 @@ export interface UpdateProviderPayload {
   business_name?:       string;
   hourly_rate?:         string;
   years_of_experience?: number;
+  profile_picture?:     any; // File object or null
 }
 
 // GET /api/v1/providers/me/

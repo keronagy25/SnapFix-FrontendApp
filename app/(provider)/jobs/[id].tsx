@@ -9,14 +9,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, MapPin, Calendar, Clock, DollarSign,
   FileText, Tag, CheckCircle, XCircle, Play, Flag,
-  AlertCircle, RefreshCw,
+  AlertCircle, RefreshCw, Star,
 } from "lucide-react-native";
 import { useAuthStore }  from "@/store/authStore";
 import { Typography }    from "@/theme/typography";
 import {
-  getBookingById, acceptJob, declineJob,
+  getHistoryDetail, acceptJob, declineJob,
   startJob, completeJob, providerCancelJob,
-  type ServiceRequest,
+  type ServiceRequest, type HistoryDetail,
 } from "@/services/bookingService";
 
 const STATUS: Record<string, { label: string; color: string; bg: string; desc: string }> = {
@@ -120,7 +120,7 @@ export default function ProviderJobDetailScreen() {
   const { id }   = useLocalSearchParams<{ id: string }>();
   const token    = useAuthStore((s) => s.token);
 
-  const [job,        setJob]        = useState<ServiceRequest | null>(null);
+  const [job,        setJob]        = useState<HistoryDetail | null>(null);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error,      setError]      = useState<string | null>(null);
@@ -135,7 +135,7 @@ export default function ProviderJobDetailScreen() {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
-      const data = await getBookingById(id, token);
+      const data = await getHistoryDetail(id, token) as HistoryDetail;
       setJob(data);
     } catch (err: any) {
       setError(err?.data?.detail ?? err?.message ?? "Failed to load job.");
@@ -276,6 +276,59 @@ export default function ProviderJobDetailScreen() {
               </View>
             ))}
           </Card>
+
+          {/* Customer card */}
+          {(job as HistoryDetail).customer && (
+            <>
+              <SectionLabel label="CUSTOMER INFORMATION" />
+              <Card>
+                <View style={{ paddingVertical:12 }}>
+                  <View style={{ flexDirection:"row", alignItems:"center", gap:12, marginBottom:12 }}>
+                    <View style={{ width:48, height:48, borderRadius:12, backgroundColor:"#E2E8F0", alignItems:"center", justifyContent:"center" }}>
+                      <Text style={{ fontSize:20 }}>👤</Text>
+                    </View>
+                    <View style={{ flex:1 }}>
+                      <Text style={{ fontFamily: Typography.fonts.bold, fontSize:15, color:"#0F172A" }}>
+                        {(job as HistoryDetail).customer!.first_name} {(job as HistoryDetail).customer!.last_name}
+                      </Text>
+                      <Text style={{ fontFamily: Typography.fonts.regular, fontSize:12, color:"#94A3B8", marginTop:2 }}>
+                        {(job as HistoryDetail).customer!.total_bookings || 0} bookings
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </Card>
+            </>
+          )}
+
+          {/* Review section */}
+          {job.status === "completed" && job.review && (
+            <>
+              <SectionLabel label="CUSTOMER REVIEW" />
+              <Card>
+                <View style={{ paddingVertical:12 }}>
+                  <View style={{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:12 }}>
+                    {[1,2,3,4,5].map(n => (
+                      <Star key={n} size={18} color="#F59E0B" fill={n <= job.review!.rating ? "#F59E0B" : "transparent"} />
+                    ))}
+                    <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:14, color:"#0F172A", marginLeft:8 }}>
+                      {job.review.rating}.0
+                    </Text>
+                  </View>
+                  {job.review.comment && (
+                    <View style={{ backgroundColor:"#FFFBEB", borderRadius:12, padding:12, borderWidth:1, borderColor:"#FDE68A", marginBottom:10 }}>
+                      <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"#92400E", lineHeight:20 }}>
+                        "{job.review.comment}"
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#94A3B8" }}>
+                    Reviewed on {new Date(job.review.created_at).toLocaleDateString("en-EG")}
+                  </Text>
+                </View>
+              </Card>
+            </>
+          )}
 
           {/* Action buttons */}
           <View style={{ marginTop:24, gap:12 }}>

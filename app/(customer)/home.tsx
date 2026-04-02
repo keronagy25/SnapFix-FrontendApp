@@ -11,11 +11,12 @@ import {
   Menu, X, Home, BookOpen, User, Settings,
   HelpCircle, LogOut, Shield, Gift, MessageCircle,
   Zap, Clock, Star,
-  Building2,
+  Building2, Heart,
 } from "lucide-react-native";
 import { useAuthStore }    from "@/store/authStore";
 import { Typography }      from "@/theme/typography";
 import { getCategories, type Category } from "@/services/coreService";
+import { getFavorites, type FavoriteProvider } from "@/services/customerService";
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
 function useR() {
@@ -108,13 +109,14 @@ const PROMOS = [
 
 /* ─── Drawer items ───────────────────────────────────────────────── */
 const DRAWER_MAIN = [
-  { id: "home",     label: "Home",           icon: Home,          route: "/(customer)/home",     color: "#3B82F6" },
-  { id: "bookings", label: "My Bookings",    icon: BookOpen,      route: "/(customer)/booking",  color: "#10B981" },
-  { id: "chat",     label: "Messages",       icon: MessageCircle, route: "/(customer)/chat",     color: "#06B6D4" },
-  { id: "profile",  label: "Profile",        icon: User,          route: "/(customer)/profile",  color: "#8B5CF6" },
-  { id: "offices",  label: "Our Offices",    icon: Building2,     route: "/(customer)/offices",  color: "#06B6D4" },
-  { id: "offers",   label: "Offers & Deals", icon: Gift,          route: "/(customer)/offers",   color: "#EC4899" },
-  { id: "settings", label: "Settings",       icon: Settings,      route: "/(customer)/settings", color: "#F59E0B" },
+  { id: "home",     label: "Home",           icon: Home,          route: "/(customer)/home",       color: "#3B82F6" },
+  { id: "bookings", label: "My Bookings",    icon: BookOpen,      route: "/(customer)/booking",    color: "#10B981" },
+  { id: "favorites",label: "Favorites",      icon: Heart,         route: "/(customer)/favorites",  color: "#EC4899" },
+  { id: "chat",     label: "Messages",       icon: MessageCircle, route: "/(customer)/chat",       color: "#06B6D4" },
+  { id: "profile",  label: "Profile",        icon: User,          route: "/(customer)/profile",    color: "#8B5CF6" },
+  { id: "offices",  label: "Our Offices",    icon: Building2,     route: "/(customer)/offices",    color: "#06B6D4" },
+  { id: "offers",   label: "Offers & Deals", icon: Gift,          route: "/(customer)/offers",     color: "#EC4899" },
+  { id: "settings", label: "Settings",       icon: Settings,      route: "/(customer)/settings",   color: "#F59E0B" },
 ];
 const DRAWER_BOTTOM = [
   { id: "help",   label: "Help & Support", icon: HelpCircle, route: "/(customer)/support" },
@@ -198,8 +200,7 @@ function NavigationDrawer({ visible, onClose, user }: {
                 </TouchableOpacity>
               );
             })}
-            <View style={{ height:1, backgroundColor:"#F1F5F9", marginHorizontal:20, marginTop:12, marginBottom:16 }} />
-            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:10, color:"#94A3B8", letterSpacing:1.2, marginLeft:20, marginBottom:8 }}>MORE</Text>
+            <View style={{ height:1, backgroundColor:"#F1F5F9", marginHorizontal:20, marginTop:12, marginBottom:16 }} />            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:10, color:"#94A3B8", letterSpacing:1.2, marginLeft:20, marginBottom:8 }}>MORE</Text>
             {DRAWER_BOTTOM.map((item) => (
               <TouchableOpacity key={item.id} onPress={() => handleNav(item.route)} activeOpacity={0.75}
                 style={{ flexDirection:"row", alignItems:"center", marginHorizontal:12, marginBottom:4, paddingVertical:11, paddingHorizontal:14, borderRadius:14 }}>
@@ -237,6 +238,8 @@ export default function CustomerHomeScreen() {
   const [categories,  setCategories]  = useState<MappedCat[]>([]);
   const [catsLoading, setCatsLoading] = useState(true);
   const [catsError,   setCatsError]   = useState<string | null>(null);
+  const [favorites,   setFavorites]   = useState<FavoriteProvider[]>([]);
+  const [favsLoading, setFavsLoading] = useState(true);
 
   const r     = useR();
   const user  = useAuthStore((s) => s.user);
@@ -258,7 +261,23 @@ export default function CustomerHomeScreen() {
       setCatsLoading(false);
     }
   };
-  useEffect(() => { loadCategories(); }, []);
+  const loadFavorites = async () => {
+    if (!token) return;
+    try {
+      setFavsLoading(true);
+      const list = await getFavorites(token);
+      setFavorites(list);
+    } catch (err: any) {
+      console.log("Failed to load favorites:", err);
+      setFavorites([]);
+    } finally {
+      setFavsLoading(false);
+    }
+  };
+  useEffect(() => { 
+    loadCategories();
+    loadFavorites();
+  }, []);
 
   const centerWrap: any = r.isWeb
     ? { maxWidth: r.maxW, width:"100%", alignSelf:"center", paddingHorizontal: r.px }
@@ -386,18 +405,53 @@ export default function CustomerHomeScreen() {
                 <Text style={{ fontFamily: Typography.fonts.medium, fontSize:14, color:"#64748B" }}>No services found</Text>
               </View>
             ) : (
-              <View style={{ flexDirection:"row", flexWrap:"wrap" }}>
+              <View style={{ flexDirection:"row", flexWrap:"wrap", marginHorizontal: r.isWeb ? -8 : 0 }}>
                 {visibleCats.map((cat, i) => {
-                  const cols  = r.isWeb ? 10 : r.isTablet ? 8 : 5;
-                  const itemW = (r.width - r.px * 2) / cols;
+                  // Responsive grid columns
+                  let cols: number;
+                  if (r.isWeb) cols = 10;
+                  else if (r.isTablet) cols = r.width >= 620 ? 6 : 5;
+                  else cols = r.width >= 380 ? 4 : 3;
+                  
+                  const gap = r.isWeb ? 8 : r.isTablet ? 6 : 4;
+                  const totalGapWidth = (cols - 1) * gap;
+                  const itemW = (r.width - r.px * 2 - totalGapWidth) / cols;
+                  
                   return (
-                    <View key={cat.id} style={{ width: r.isWeb ? `${100/cols}%` : itemW, alignItems:"center", marginBottom:18 }}>
-                      <TouchableOpacity activeOpacity={0.82} style={{ alignItems:"center" }}
+                    <View key={cat.id} style={{ 
+                      width: r.isWeb ? `${100/cols}%` : itemW,
+                      alignItems:"center", 
+                      marginBottom: r.isWeb ? 20 : r.isTablet ? 18 : 16,
+                      paddingHorizontal: r.isWeb ? 8 : 0,
+                      marginRight: r.isWeb ? 0 : (i % cols === cols - 1 ? 0 : gap)
+                    }}>
+                      <TouchableOpacity activeOpacity={0.82} style={{ alignItems:"center", width:"100%" }}
                         onPress={() => router.push({ pathname:"/(customer)/booking/create" as any, params:{ category_id: String(cat.id), category_name: cat.name } })}>
-                        <View style={{ width:catSize, height:catSize, borderRadius:18, backgroundColor:cat.bg, alignItems:"center", justifyContent:"center", marginBottom:7, shadowColor:cat.color, shadowOffset:{width:0,height:4}, shadowOpacity:0.2, shadowRadius:8, elevation:4 }}>
+                        <View style={{ 
+                          width:catSize, 
+                          height:catSize, 
+                          borderRadius: r.isWeb ? 20 : r.isTablet ? 16 : 14,
+                          backgroundColor:cat.bg, 
+                          alignItems:"center", 
+                          justifyContent:"center", 
+                          marginBottom: r.isWeb ? 10 : r.isTablet ? 8 : 6, 
+                          shadowColor:cat.color, 
+                          shadowOffset:{width:0,height:4}, 
+                          shadowOpacity:0.2, 
+                          shadowRadius:8, 
+                          elevation:4 
+                        }}>
                           <Text style={{ fontSize: r.isWeb?28:r.isTablet?24:20 }}>{cat.icon}</Text>
                         </View>
-                        <Text style={{ fontFamily: Typography.fonts.medium, fontSize: r.fs(10), color:"#64748B", textAlign:"center", lineHeight:14, paddingHorizontal:2 }} numberOfLines={2}>
+                        <Text style={{ 
+                          fontFamily: Typography.fonts.medium, 
+                          fontSize: r.isWeb ? 11 : r.isTablet ? 11 : 10, 
+                          color:"#64748B", 
+                          textAlign:"center", 
+                          lineHeight: r.isWeb ? 16 : r.isTablet ? 15 : 13,
+                          paddingHorizontal: r.isWeb ? 4 : 2,
+                          maxWidth: itemW
+                        }} numberOfLines={2}>
                           {cat.name}
                         </Text>
                       </TouchableOpacity>
@@ -486,56 +540,82 @@ export default function CustomerHomeScreen() {
             </View>
           )}
 
-          {/* ── TOP PROVIDERS ── */}
-          {/* TODO: replace MOCK_PROVIDERS with GET /api/v1/providers/top/ when ready */}
+          {/* ── FAVORITE PROVIDERS ── */}
           {!search && (
             <View style={{ marginTop:24, marginBottom:8 }}>
               <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
                 <View>
-                  <Text style={{ fontFamily: Typography.fonts.bold, fontSize: r.fs(18), color:"#0F172A" }}>Top Providers</Text>
-                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize: r.fs(12), color:"#94A3B8", marginTop:2 }}>Highly rated in Cairo</Text>
+                  <Text style={{ fontFamily: Typography.fonts.bold, fontSize: r.fs(18), color:"#0F172A" }}>Favorite Providers</Text>
+                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize: r.fs(12), color:"#94A3B8", marginTop:2 }}>
+                    {favorites.length === 0 ? "No favorites yet" : `${favorites.length} saved`}
+                  </Text>
                 </View>
               </View>
 
-              {MOCK_PROVIDERS.map((prov, i) => (
-                <View key={prov.id} >
-                  <TouchableOpacity activeOpacity={0.88}
-                    style={{ backgroundColor:"#fff", borderRadius:18, padding:16, marginBottom:10, flexDirection:"row", alignItems:"center", borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:3}, shadowOpacity:0.06, shadowRadius:10, elevation:3 }}>
-                    {/* Avatar */}
-                    <View style={{ width:52, height:52, borderRadius:16, backgroundColor: prov.avatarColor+"22", alignItems:"center", justifyContent:"center", marginRight:14 }}>
-                      <Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color: prov.avatarColor }}>{prov.initials}</Text>
-                    </View>
-                    {/* Info */}
-                    <View style={{ flex:1 }}>
-                      <View style={{ flexDirection:"row", alignItems:"center", gap:6, marginBottom:3 }}>
-                        <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: r.fs(14), color:"#0F172A" }}>{prov.name}</Text>
-                        {prov.verified && (
-                          <View style={{ backgroundColor:"#EFF6FF", paddingHorizontal:6, paddingVertical:2, borderRadius:6 }}>
-                            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:9, color:"#3B82F6" }}>✓ Verified</Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text style={{ fontFamily: Typography.fonts.regular, fontSize: r.fs(12), color:"#94A3B8", marginBottom:5 }}>
-                        {prov.profession} · {prov.jobs} jobs
-                      </Text>
-                      <View style={{ flexDirection:"row", alignItems:"center", gap:10 }}>
-                        <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
-                          <Text style={{ fontSize:11 }}>⭐</Text>
-                          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: r.fs(12), color:"#F59E0B" }}>{prov.rating}</Text>
-                        </View>
-                        <Text style={{ fontFamily: Typography.fonts.regular, fontSize: r.fs(12), color:"#CBD5E1" }}>·</Text>
-                        <Text style={{ fontFamily: Typography.fonts.medium, fontSize: r.fs(12), color:"#64748B" }}>{prov.rate} EGP/hr</Text>
-                      </View>
-                    </View>
-                    {/* Book */}
-                    <TouchableOpacity
-                      onPress={() => router.push({ pathname:"/(customer)/booking/create" as any, params:{ category_name: prov.profession } })}
-                      style={{ backgroundColor:"#1E3A8A", paddingHorizontal:14, paddingVertical:9, borderRadius:12 }}>
-                      <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: r.fs(12), color:"#fff" }}>Book</Text>
-                    </TouchableOpacity>
+              {favsLoading ? (
+                <View style={{ alignItems:"center", paddingVertical:36 }}>
+                  <ActivityIndicator size="large" color="#1E3A8A" />
+                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"#94A3B8", marginTop:10 }}>Loading favorites…</Text>
+                </View>
+              ) : favorites.length === 0 ? (
+                <View style={{ backgroundColor:"#F8FAFC", borderRadius:18, padding:20, alignItems:"center", gap:12, borderWidth:1, borderColor:"#E2E8F0" }}>
+                  <Text style={{ fontSize:40 }}>⭐</Text>
+                  <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:15, color:"#0F172A" }}>No Favorite Providers Yet</Text>
+                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"#94A3B8", textAlign:"center" }}>
+                    Add your preferred providers to favorites for quick access
+                  </Text>
+                  <TouchableOpacity onPress={() => router.push("/(customer)/booking/create" as any)}
+                    style={{ backgroundColor:"#1E3A8A", paddingHorizontal:24, paddingVertical:11, borderRadius:14, marginTop:8 }}>
+                    <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:13, color:"#fff" }}>Browse Providers</Text>
                   </TouchableOpacity>
                 </View>
-              ))}
+              ) : (
+                favorites.map((prov) => (
+                  <View key={prov.id}>
+                    <TouchableOpacity activeOpacity={0.88}
+                      style={{ backgroundColor:"#fff", borderRadius:18, padding:16, marginBottom:10, flexDirection:"row", alignItems:"center", borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:3}, shadowOpacity:0.06, shadowRadius:10, elevation:3 }}>
+                      {/* Avatar */}
+                      <View style={{ width:52, height:52, borderRadius:16, backgroundColor:"#EEE2FF", alignItems:"center", justifyContent:"center", marginRight:14 }}>
+                        <Star size={20} color="#8B5CF6" fill="#8B5CF6" />
+                      </View>
+                      {/* Info */}
+                      <View style={{ flex:1 }}>
+                        <View style={{ flexDirection:"row", alignItems:"center", gap:6, marginBottom:3 }}>
+                          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: r.fs(14), color:"#0F172A" }}>
+                            {prov.first_name} {prov.last_name}
+                          </Text>
+                          {prov.is_available && (
+                            <View style={{ backgroundColor:"#ECFDF5", paddingHorizontal:6, paddingVertical:2, borderRadius:6 }}>
+                              <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:9, color:"#10B981" }}>✓ Available</Text>
+                            </View>
+                          )}
+                        </View>
+                        {prov.business_name && (
+                          <Text style={{ fontFamily: Typography.fonts.regular, fontSize: r.fs(12), color:"#94A3B8", marginBottom:3 }}>
+                            {prov.business_name}
+                          </Text>
+                        )}
+                        <View style={{ flexDirection:"row", alignItems:"center", gap:10 }}>
+                          <View style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
+                            <Text style={{ fontSize:11 }}>⭐</Text>
+                            <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: r.fs(12), color:"#F59E0B" }}>{prov.rating?.toFixed(1) ?? "—"}</Text>
+                          </View>
+                          <Text style={{ fontFamily: Typography.fonts.regular, fontSize: r.fs(12), color:"#CBD5E1" }}>·</Text>
+                          <Text style={{ fontFamily: Typography.fonts.medium, fontSize: r.fs(12), color:"#64748B" }}>
+                            {prov.total_reviews} reviews · {prov.completion_rate}% completed
+                          </Text>
+                        </View>
+                      </View>
+                      {/* Book */}
+                      <TouchableOpacity
+                        onPress={() => router.push("/(customer)/booking/create" as any)}
+                        style={{ backgroundColor:"#6366F1", paddingHorizontal:14, paddingVertical:9, borderRadius:12 }}>
+                        <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: r.fs(12), color:"#fff" }}>Book</Text>
+                      </TouchableOpacity>
+                    </TouchableOpacity>
+                  </View>
+                ))
+              )}
             </View>
           )}
 

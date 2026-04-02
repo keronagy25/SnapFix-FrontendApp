@@ -93,27 +93,153 @@ function SelectPill({ selected, onPress, placeholder, hasError }: {
   );
 }
 
-/* ─── Generic picker sheet ───────────────────────────────────────── */
-function PickerSheet<T extends { id: number; name: string }>({
-  visible, items, title, onSelect, onClose,
-}: { visible: boolean; items: T[]; title: string; onSelect: (i: T) => void; onClose: () => void }) {
+/* ─── Category Picker Modal ───────────────────────────────────────── */
+function CategoryPickerModal({ visible, items, onSelect, onClose }: {
+  visible: boolean; items: Category[]; onSelect: (item: Category) => void; onClose: () => void;
+}) {
   if (!visible) return null;
+  
   return (
-    <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end", zIndex: 999 }}>
-      <TouchableOpacity style={{ flex: 1 }} onPress={onClose} />
-      <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, maxHeight: "65%", paddingBottom: Platform.OS === "ios" ? 40 : 24 }}>
-        <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
-        <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 17, color: "#0F172A", marginBottom: 14 }}>{title}</Text>
-        <ScrollView showsVerticalScrollIndicator={false}>
-          {items.map((item) => (
-            <TouchableOpacity key={item.id} onPress={() => { onSelect(item); onClose(); }}
-              style={{ paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#F1F5F9" }}>
-              <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 15, color: "#0F172A" }}>{item.name}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={{ 
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "flex-end",
+      }}>
+        <TouchableOpacity 
+          style={{ flex: 1 }} 
+          onPress={onClose} 
+          activeOpacity={1} 
+        />
+        <View style={{ 
+          backgroundColor: "#fff",
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          padding: 20,
+          maxHeight: "80%",
+          paddingBottom: Platform.OS === "ios" ? 40 : 24,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+          elevation: 20,
+        }}>
+          <View style={{ 
+            width: 40, 
+            height: 4, 
+            borderRadius: 2, 
+            backgroundColor: "#E2E8F0", 
+            alignSelf: "center", 
+            marginBottom: 16 
+          }} />
+          <Text style={{ 
+            fontFamily: Typography.fonts.bold, 
+            fontSize: 17, 
+            color: "#0F172A", 
+            marginBottom: 14 
+          }}>Select Service Category</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {items.map((item) => (
+              <TouchableOpacity 
+                key={item.id} 
+                onPress={() => { onSelect(item); onClose(); }}
+                style={{ 
+                  paddingVertical: 14, 
+                  borderBottomWidth: 1, 
+                  borderBottomColor: "#F1F5F9" 
+                }}>
+                <Text style={{ 
+                  fontFamily: Typography.fonts.medium, 
+                  fontSize: 15, 
+                  color: "#0F172A" 
+                }}>{item.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
       </View>
-    </View>
+    </Modal>
+  );
+}
+
+/* ─── Region Picker Modal ───────────────────────────────────────── */
+function RegionPickerModal({ visible, items, onSelect, onClose }: {
+  visible: boolean; items: Region[]; onSelect: (item: Region) => void; onClose: () => void;
+}) {
+  if (!visible) return null;
+  
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+      statusBarTranslucent
+    >
+      <View style={{ 
+        flex: 1,
+        backgroundColor: "rgba(0,0,0,0.5)",
+        justifyContent: "flex-end",
+      }}>
+        <TouchableOpacity 
+          style={{ flex: 1 }} 
+          onPress={onClose} 
+          activeOpacity={1} 
+        />
+        <View style={{ 
+          backgroundColor: "#fff",
+          borderTopLeftRadius: 28,
+          borderTopRightRadius: 28,
+          padding: 20,
+          maxHeight: "80%",
+          paddingBottom: Platform.OS === "ios" ? 40 : 24,
+          shadowColor: "#000",
+          shadowOffset: { width: 0, height: -3 },
+          shadowOpacity: 0.1,
+          shadowRadius: 5,
+          elevation: 20,
+        }}>
+          <View style={{ 
+            width: 40, 
+            height: 4, 
+            borderRadius: 2, 
+            backgroundColor: "#E2E8F0", 
+            alignSelf: "center", 
+            marginBottom: 16 
+          }} />
+          <Text style={{ 
+            fontFamily: Typography.fonts.bold, 
+            fontSize: 17, 
+            color: "#0F172A", 
+            marginBottom: 14 
+          }}>Select Region</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {items.map((item) => (
+              <TouchableOpacity 
+                key={item.id} 
+                onPress={() => { onSelect(item); onClose(); }}
+                style={{ 
+                  paddingVertical: 14, 
+                  borderBottomWidth: 1, 
+                  borderBottomColor: "#F1F5F9" 
+                }}>
+                <Text style={{ 
+                  fontFamily: Typography.fonts.medium, 
+                  fontSize: 15, 
+                  color: "#0F172A" 
+                }}>{item.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
   );
 }
 
@@ -160,7 +286,7 @@ function CalendarPicker({ visible, value, onSelect, onClose }: {
   const isPast     = (d: number) => new Date(viewYear, viewMonth, d) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.5)", justifyContent:"center", paddingHorizontal:20 }}>
         <View style={{ backgroundColor:"#fff", borderRadius:28, padding:20, shadowColor:"#000", shadowOffset:{width:0,height:12}, shadowOpacity:0.15, shadowRadius:32, elevation:16 }}>
 
@@ -264,7 +390,7 @@ function TimePicker({ visible, value, onSelect, onClose }: {
   const display12 = hour > 12 ? hour - 12 : hour === 0 ? 12 : hour;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.5)", justifyContent:"center", paddingHorizontal:20 }}>
         <View style={{ backgroundColor:"#fff", borderRadius:28, padding:20 }}>
 
@@ -519,8 +645,11 @@ export default function BookingCreateScreen() {
         </View>
       </LinearGradient>
 
-      <ScrollView contentContainerStyle={{ padding:20, paddingBottom:100 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-
+      <ScrollView 
+        contentContainerStyle={{ padding:20, paddingBottom: Platform.OS === "ios" ? 120 : 100 }} 
+        showsVerticalScrollIndicator={false} 
+        keyboardShouldPersistTaps="handled"
+      >
 
         {/* ── API error banner ── */}
         {apiError && (
@@ -529,8 +658,9 @@ export default function BookingCreateScreen() {
             <Text style={{ flex:1, fontFamily: Typography.fonts.medium, fontSize:13, color:"#EF4444" }}>{apiError}</Text>
           </View>
         )}
+        
         {/* ── SERVICE DETAILS ── */}
-        <View >
+        <View>
           <View style={{ backgroundColor:"#fff", borderRadius:20, padding:16, marginBottom:14, borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:8, elevation:2 }}>
             <Text style={{ fontFamily: Typography.fonts.bold, fontSize:15, color:"#0F172A", marginBottom:14 }}>🔧 Service Details</Text>
             <Field label="Service Category" required error={errors.category}>
@@ -560,7 +690,7 @@ export default function BookingCreateScreen() {
         </View>
 
         {/* ── LOCATION ── */}
-        <View >
+        <View>
           <View style={{ backgroundColor:"#fff", borderRadius:20, padding:16, marginBottom:14, borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:8, elevation:2 }}>
             <Text style={{ fontFamily: Typography.fonts.bold, fontSize:15, color:"#0F172A", marginBottom:14 }}>📍 Location</Text>
             <Field label="Region" required error={errors.region}>
@@ -575,7 +705,7 @@ export default function BookingCreateScreen() {
         </View>
 
         {/* ── SCHEDULE ── */}
-        <View >
+        <View>
           <View style={{ backgroundColor:"#fff", borderRadius:20, padding:16, marginBottom:14, borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:8, elevation:2 }}>
             <Text style={{ fontFamily: Typography.fonts.bold, fontSize:15, color:"#0F172A", marginBottom:14 }}>📅 Schedule</Text>
 
@@ -616,7 +746,7 @@ export default function BookingCreateScreen() {
 
         {/* ── SUMMARY ── */}
         {(form.category_name || form.region_name || form.title) && (
-          <View >
+          <View>
             <View style={{ backgroundColor:"#EFF6FF", borderRadius:18, padding:16, marginBottom:14, borderWidth:1, borderColor:"#BFDBFE" }}>
               <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:12, color:"#1D4ED8", marginBottom:10, letterSpacing:0.5 }}>📋 BOOKING SUMMARY</Text>
               {form.category_name  && <SRow label="Service"  value={form.category_name} />}
@@ -630,7 +760,7 @@ export default function BookingCreateScreen() {
         )}
 
         {/* ── SUBMIT ── */}
-        <View >
+        <View>
           <TouchableOpacity onPress={handleSubmit} disabled={submitting} activeOpacity={0.88}
             style={{ borderRadius:18, overflow:"hidden", opacity: submitting ? 0.75 : 1 }}>
             <LinearGradient colors={["#1E3A8A","#1E40AF"]} start={{x:0,y:0}} end={{x:1,y:0}}
@@ -645,17 +775,40 @@ export default function BookingCreateScreen() {
 
       </ScrollView>
 
-      {/* ── Pickers ── */}
-      <PickerSheet visible={catPicker} items={categories} title="Select Service Category"
-        onSelect={item => { set("category_id", item.id); set("category_name", item.name); }}
-        onClose={() => setCatPicker(false)} />
-      <PickerSheet visible={regPicker} items={regions} title="Select Region"
-        onSelect={item => { set("region_id", item.id); set("region_name", item.name); }}
-        onClose={() => setRegPicker(false)} />
-      <CalendarPicker visible={calPicker} value={form.preferred_date}
-        onSelect={d => set("preferred_date", d)} onClose={() => setCalPicker(false)} />
-      <TimePicker visible={timePicker} value={form.preferred_time}
-        onSelect={t => set("preferred_time", t)} onClose={() => setTimePicker(false)} />
+      {/* ── Pickers ── Render at root level outside ScrollView */}
+      <CategoryPickerModal 
+        visible={catPicker} 
+        items={categories} 
+        onSelect={(item) => { 
+          set("category_id", item.id); 
+          set("category_name", item.name); 
+        }}
+        onClose={() => setCatPicker(false)} 
+      />
+      
+      <RegionPickerModal 
+        visible={regPicker} 
+        items={regions} 
+        onSelect={(item) => { 
+          set("region_id", item.id); 
+          set("region_name", item.name); 
+        }}
+        onClose={() => setRegPicker(false)} 
+      />
+      
+      <CalendarPicker 
+        visible={calPicker} 
+        value={form.preferred_date}
+        onSelect={d => set("preferred_date", d)} 
+        onClose={() => setCalPicker(false)} 
+      />
+      
+      <TimePicker 
+        visible={timePicker} 
+        value={form.preferred_time}
+        onSelect={t => set("preferred_time", t)} 
+        onClose={() => setTimePicker(false)} 
+      />
     </View>
   );
 }

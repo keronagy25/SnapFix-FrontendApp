@@ -3,7 +3,9 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
   Alert, TextInput, RefreshControl,
+  ImageBackground,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -11,7 +13,7 @@ import {
   Briefcase, CheckCircle, Clock, Edit3,
   Save, X, RefreshCw, AlertCircle,
   DollarSign, Shield, MapPin, TrendingUp,
-  Award, BarChart2, Wallet,
+  Award, BarChart2, Wallet, Camera,
 } from "lucide-react-native";
 import { useAuthStore }          from "@/store/authStore";
 import { Typography }            from "@/theme/typography";
@@ -142,6 +144,7 @@ export default function ProviderProfileScreen() {
     business_name:       "",
     hourly_rate:         "",
     years_of_experience: "",
+    profile_picture_uri: "",
   });
 
   /* ── fetch ── */
@@ -174,9 +177,27 @@ export default function ProviderProfileScreen() {
       business_name:       profile?.business_name       ?? "",
       hourly_rate:         profile?.hourly_rate         ?? "",
       years_of_experience: String(profile?.years_of_experience ?? ""),
+      profile_picture_uri: "",
     });
     setEditErrors({});
     setEditOpen(true);
+  };
+
+  /* ── pick profile picture ── */
+  const pickProfilePicture = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled) {
+        setEditForm(f => ({ ...f, profile_picture_uri: result.assets[0].uri }));
+      }
+    } catch (err: any) {
+      Alert.alert("Error", "Could not pick image.");
+    }
   };
 
   /* ── save ── */
@@ -381,7 +402,7 @@ export default function ProviderProfileScreen() {
       {/* ══ EDIT BOTTOM SHEET ══ */}
       {editOpen && (
         <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: "rgba(15,23,42,0.6)", justifyContent: "flex-end" }}>
-          <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === "ios" ? 40 : 28, maxHeight: "90%" }}
+          <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, paddingHorizontal: 20, paddingTop: 16, paddingBottom: Platform.OS === "ios" ? 100 : 120, maxHeight: "90%", flexDirection: "column", flex: 1 }}
           >
             {/* Handle */}
             <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
@@ -395,7 +416,30 @@ export default function ProviderProfileScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
+              {/* Profile Picture */}
+              <View style={{ alignItems: "center", marginBottom: 24 }}>
+                <TouchableOpacity onPress={pickProfilePicture}
+                  style={{ position: "relative", width: 100, height: 100, borderRadius: 28, marginBottom: 12, overflow: "hidden", borderWidth: 2, borderColor: "#E2E8F0", borderStyle: "dashed" }}>
+                  {editForm.profile_picture_uri ? (
+                    <ImageBackground 
+                      source={{ uri: editForm.profile_picture_uri }} 
+                      style={{ width: "100%", height: "100%", position: "absolute" }}
+                      imageStyle={{ borderRadius: 28 }}
+                    >
+                      <View style={{ backgroundColor: "rgba(0,0,0,0.3)", width: "100%", height: "100%", alignItems: "center", justifyContent: "center" }}>
+                        <Camera size={28} color="#fff" />
+                      </View>
+                    </ImageBackground>
+                  ) : (
+                    <View style={{ width: "100%", height: "100%", backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center" }}>
+                      <Camera size={32} color="#94A3B8" />
+                    </View>
+                  )}
+                </TouchableOpacity>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#94A3B8", textAlign: "center" }}>Tap to change photo</Text>
+              </View>
+
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <EditField label="First Name" value={editForm.first_name} error={editErrors.first_name}
@@ -425,11 +469,14 @@ export default function ProviderProfileScreen() {
               <EditField label="Bio" value={editForm.bio} error={editErrors.bio} multiline
                 onChange={(v) => { setEditForm((f) => ({ ...f, bio: v })); setEditErrors(e => ({...e, bio: undefined as any})); }} />
 
-              <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#94A3B8", marginBottom: 16 }}>
+              <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#94A3B8", marginBottom: 80 }}>
                 ✉️ Email cannot be changed. Contact support if needed.
               </Text>
+            </ScrollView>
 
-              <TouchableOpacity onPress={handleSave} disabled={saving} activeOpacity={0.88} style={{ borderRadius: 18, overflow: "hidden", opacity: saving ? 0.7 : 1, marginBottom: 8 }}>
+            {/* Save Button - Sticky at bottom */}
+            <View style={{ position: "absolute", bottom: Platform.OS === "ios" ? 60 : 80, left: 20, right: 20 }}>
+              <TouchableOpacity onPress={handleSave} disabled={saving} activeOpacity={0.88} style={{ borderRadius: 18, overflow: "hidden", opacity: saving ? 0.7 : 1 }}>
                 <LinearGradient colors={["#06B6D4", "#0284C7"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
                   style={{ paddingVertical: 16, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
                   {saving
@@ -438,7 +485,7 @@ export default function ProviderProfileScreen() {
                   }
                 </LinearGradient>
               </TouchableOpacity>
-            </ScrollView>
+            </View>
           </View>
         </View>
       )}

@@ -13,7 +13,7 @@ import {
 import { useAuthStore }   from "@/store/authStore";
 import { Typography }     from "@/theme/typography";
 import {
-  getMyBookings, cancelBooking,
+  getBookings, cancelBooking,
   type ServiceRequest, type BookingStatus,
 } from "@/services/bookingService";
 
@@ -30,10 +30,12 @@ const STATUS: Record<BookingStatus, { label:string; color:string; bg:string; ico
 const FILTERS: { key:BookingStatus|"all"; label:string }[] = [
   { key:"all",         label:"All"       },
   { key:"pending",     label:"Pending"   },
+  { key:"assigned",    label:"Assigned"  },
   { key:"confirmed",   label:"Confirmed" },
   { key:"in_progress", label:"Active"    },
   { key:"completed",   label:"Completed" },
   { key:"cancelled",   label:"Cancelled" },
+  { key:"declined",    label:"Declined"  },
 ];
 
 const canCancel: BookingStatus[] = ["pending","assigned","confirmed","in_progress"];
@@ -184,7 +186,7 @@ export default function CustomerBookingsScreen() {
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
     try {
-      const data = await getMyBookings(token);
+      const data = await getBookings(token);
       setBookings(data);
     } catch (err: any) {
       setError(getApiError(err, "Failed to load bookings."));

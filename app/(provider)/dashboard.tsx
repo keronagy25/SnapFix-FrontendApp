@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
-  Switch, StatusBar, Platform, useWindowDimensions,
+  StatusBar, Platform, useWindowDimensions,
   Modal, Animated, Pressable, ActivityIndicator,
   RefreshControl, Alert,
 } from "react-native";
@@ -19,7 +19,7 @@ import { useAuthStore }       from "@/store/authStore";
 import { Typography }         from "@/theme/typography";
 import { getProviderProfile } from "@/services/providerService";
 import { extractApiMessage } from "@/services/api";
-import { getOpenJobs, getMyJobs, pickJob, type ServiceRequest } from "@/services/bookingService";
+import { getOpenJobs, getBookings, pickJob, type ServiceRequest } from "@/services/bookingService";
 
 /* ─── Responsive ──────────────────────────────────────────────────── */
 function useR() {
@@ -155,22 +155,18 @@ function FeedbackModal({ data, onClose }: { data:{title:string;msg:string;ok:boo
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.55)", justifyContent:"center", paddingHorizontal:24 }}>
         <View style={{ backgroundColor:"#fff", borderRadius:24, overflow:"hidden", shadowColor:"#000", shadowOffset:{width:0,height:12}, shadowOpacity:0.2, shadowRadius:32, elevation:16 }}>
-          {/* Colored header */}
           <View style={{ backgroundColor:headerBg, paddingVertical:28, alignItems:"center" }}>
             <Text style={{ fontSize:44 }}>{emoji}</Text>
           </View>
           <View style={{ padding:24 }}>
-            {/* Title */}
             <Text style={{ fontFamily:Typography.fonts.bold, fontSize:18, color:"#0F172A", marginBottom:12, textAlign:"center" }}>
               {data.title}
             </Text>
-            {/* Message box */}
             <View style={{ backgroundColor:boxBg, borderRadius:14, padding:16, borderWidth:1.5, borderColor:boxBorder, marginBottom:20 }}>
               <Text style={{ fontFamily:Typography.fonts.regular, fontSize:14, color:textColor, lineHeight:22, textAlign:"center" }}>
                 {data.msg}
               </Text>
             </View>
-            {/* Button */}
             <TouchableOpacity onPress={onClose} activeOpacity={0.88}
               style={{ paddingVertical:15, borderRadius:16, backgroundColor:btnColor, alignItems:"center" }}>
               <Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#fff" }}>
@@ -185,14 +181,13 @@ function FeedbackModal({ data, onClose }: { data:{title:string;msg:string;ok:boo
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   MAIN DASHBOARD
+   MAIN DASHBOARD - UPDATED VERSION
 ══════════════════════════════════════════════════════════════════ */
 export default function ProviderDashboard() {
   const token   = useAuthStore((s) => s.token);
   const user    = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
 
-  const [isOnline,   setIsOnline]   = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loading,    setLoading]    = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -211,7 +206,7 @@ export default function ProviderDashboard() {
       const [prof, open, jobs] = await Promise.all([
         getProviderProfile(token),
         getOpenJobs(token),
-        getMyJobs(token),
+        getBookings(token),
       ]);
       setProfile(prof);
       setUser({ ...prof, role:"provider" } as any);
@@ -240,9 +235,6 @@ export default function ProviderDashboard() {
       const status = err?.status;
       const d      = err?.data ?? {};
 
-      console.log("[Pick error]", JSON.stringify({ status, data: d }));
-
-      // extractApiMessage handles: array, object {detail/non_field_errors}, string
       const raw = extractApiMessage(d) !== "Something went wrong."
         ? extractApiMessage(d)
         : (err?.message ?? "");
@@ -285,12 +277,36 @@ export default function ProviderDashboard() {
     ? { maxWidth:r.maxW, width:"100%", alignSelf:"center", paddingHorizontal:r.px }
     : { paddingHorizontal:r.px };
 
-  /* ── Stats from real profile ── */
+  /* UPDATED STATS - Using the correct fields from API response */
   const STATS = [
-    { label:"Total Earnings",   value: profile ? `${parseFloat(profile.total_earnings??'0').toFixed(0)} EGP` : "—",  icon:DollarSign,  color:"#10B981", bg:"rgba(16,185,129,0.12)" },
-    { label:"Jobs Completed",   value: profile?.completed_jobs ?? "—",                                                icon:CheckCircle, color:"#3B82F6", bg:"rgba(59,130,246,0.12)" },
-    { label:"Rating",           value: profile?.average_rating ? `${parseFloat(profile.average_rating).toFixed(1)}★` : "—",  icon:Star, color:"#F59E0B", bg:"rgba(245,158,11,0.12)"  },
-    { label:"Completion Rate",  value: profile?.completion_rate ? `${profile.completion_rate}%` : "—",               icon:ThumbsUp,    color:"#8B5CF6", bg:"rgba(139,92,246,0.12)"  },
+    { 
+      label: "Total Earnings", 
+      value: profile?.total_earnings ? `${parseFloat(profile.total_earnings).toFixed(0)} EGP` : "0 EGP",  
+      icon: DollarSign,  
+      color: "#10B981", 
+      bg: "rgba(16,185,129,0.12)" 
+    },
+    { 
+      label: "Jobs Completed",   
+      value: profile?.completed_jobs ? `${profile.completed_jobs}` : "0",                            
+      icon: CheckCircle, 
+      color: "#3B82F6", 
+      bg: "rgba(59,130,246,0.12)" 
+    },
+    { 
+      label: "Rating",           
+      value: profile?.rating ? `${parseFloat(profile.rating).toFixed(1)} ★` : "0.0 ★",                 
+      icon: Star, 
+      color: "#F59E0B", 
+      bg: "rgba(245,158,11,0.12)"  
+    },
+    { 
+      label: "Total Reviews",    
+      value: profile?.total_reviews ? `${profile.total_reviews}` : "0",                        
+      icon: ThumbsUp,    
+      color: "#8B5CF6", 
+      bg: "rgba(139,92,246,0.12)"  
+    },
   ];
 
   const statusColor: Record<string,string> = {
@@ -302,6 +318,18 @@ export default function ProviderDashboard() {
     assigned:"Assigned", pending:"Pending", cancelled:"Cancelled",
   };
 
+  // Debug: Log profile data to console
+  useEffect(() => {
+    if (profile) {
+      console.log("Profile Data:", {
+        total_earnings: profile.total_earnings,
+        completed_jobs: profile.completed_jobs,
+        rating: profile.rating,
+        total_reviews: profile.total_reviews,
+      });
+    }
+  }, [profile]);
+
   return (
     <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
@@ -309,10 +337,10 @@ export default function ProviderDashboard() {
       <ProviderDrawer visible={drawerOpen} onClose={() => setDrawerOpen(false)} user={user} activeRoute="dashboard" />
       <FeedbackModal data={feedback} onClose={() => { setFeedback(null); if (feedback?.ok) router.push("/(provider)/jobs" as any); }} />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:110 }}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:40 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchData(true)} tintColor="#06B6D4" colors={["#06B6D4"]} />}>
 
-        {/* ══ HEADER ══ */}
+        {/* HEADER */}
         <LinearGradient colors={["#0F172A","#1E293B","#0F172A"]} start={{x:0,y:0}} end={{x:1,y:1}}
           style={{ paddingTop:Platform.OS==="web"?28:52, paddingBottom:32, borderBottomLeftRadius:r.isWeb?0:32, borderBottomRightRadius:r.isWeb?0:32, overflow:"hidden" }}>
           <View style={{ position:"absolute", top:-60, right:-60, width:200, height:200, borderRadius:100, backgroundColor:"rgba(6,182,212,0.08)" }} />
@@ -333,49 +361,12 @@ export default function ProviderDashboard() {
                 <RefreshCw size={18} color="#fff" />
               </TouchableOpacity>
             </View>
-
-            {/* Online toggle */}
-            <View style={{ backgroundColor:"rgba(255,255,255,0.06)", borderRadius:20, padding:20, borderWidth:1, borderColor:isOnline?"rgba(6,182,212,0.4)":"rgba(255,255,255,0.08)" }}>
-              <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
-                <View style={{ flex:1 }}>
-                  <View style={{ flexDirection:"row", alignItems:"center", gap:8, marginBottom:4 }}>
-                    <View style={{ width:10, height:10, borderRadius:5, backgroundColor:isOnline?"#06B6D4":"#475569" }} />
-                    <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(16), color:isOnline?"#06B6D4":"#94A3B8" }}>
-                      {isOnline ? "Online" : "Offline"}
-                    </Text>
-                  </View>
-                  <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(12), color:"rgba(255,255,255,0.45)", lineHeight:18 }}>
-                    {isOnline ? "You're visible to customers" : "Toggle on to start receiving jobs"}
-                  </Text>
-                </View>
-                <Switch value={isOnline} onValueChange={setIsOnline}
-                  trackColor={{ false:"#334155", true:"#06B6D4" }}
-                  thumbColor={isOnline?"#fff":"#94A3B8"}
-                  ios_backgroundColor="#334155" />
-              </View>
-
-              {isOnline && (
-                <View style={{ marginTop:16, paddingTop:16, borderTopWidth:1, borderTopColor:"rgba(255,255,255,0.08)", flexDirection:"row", justifyContent:"space-around" }}>
-                  {[
-                    { label:"Balance",   value: profile ? `${parseFloat(profile.available_balance??'0').toFixed(0)} EGP` : "—", icon:Wallet   },
-                    { label:"Total Jobs",value: profile?.total_jobs ?? "—",    icon:Briefcase },
-                    { label:"Open Pool", value: openJobs.length,               icon:Clock     },
-                  ].map(item => (
-                    <View key={item.label} style={{ alignItems:"center" }}>
-                      <item.icon size={16} color="#06B6D4" style={{ marginBottom:4 }} />
-                      <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(15), color:"#fff" }}>{item.value}</Text>
-                      <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(10), color:"rgba(255,255,255,0.4)" }}>{item.label}</Text>
-                    </View>
-                  ))}
-                </View>
-              )}
-            </View>
           </View>
         </LinearGradient>
 
         <View style={centerWrap}>
 
-          {/* STATS */}
+          {/* STATS CARDS - Only 4 cards as requested */}
           {loading ? (
             <View style={{ alignItems:"center", paddingVertical:32 }}>
               <ActivityIndicator size="large" color="#06B6D4" />
@@ -400,8 +391,8 @@ export default function ProviderDashboard() {
             </View>
           )}
 
-          {/* OPEN POOL — shown when online */}
-          {isOnline && !loading && (
+          {/* OPEN JOBS SECTION */}
+          {!loading && (
             <View style={{ marginTop:28 }}>
               <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
@@ -434,7 +425,6 @@ export default function ProviderDashboard() {
                       </View>
                     )}
 
-                    {/* Job info */}
                     <View style={{ flexDirection:"row", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
                       <View style={{ flex:1, marginRight:10 }}>
                         <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(15), color:"#0F172A", marginBottom:3 }} numberOfLines={1}>{job.title}</Text>
@@ -478,23 +468,9 @@ export default function ProviderDashboard() {
             </View>
           )}
 
-          {/* OFFLINE NUDGE */}
-          {!isOnline && !loading && (
-            <View style={{ marginTop:28, backgroundColor:"#fff", borderRadius:20, padding:24, alignItems:"center", borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:10, elevation:2 }}>
-              <Text style={{ fontSize:40, marginBottom:12 }}>😴</Text>
-              <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(16), color:"#0F172A", marginBottom:6, textAlign:"center" }}>You're currently offline</Text>
-              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(13), color:"#94A3B8", textAlign:"center", lineHeight:20, marginBottom:20 }}>
-                Toggle the switch above to go online{"\n"}and start receiving job requests.
-              </Text>
-              <TouchableOpacity onPress={() => setIsOnline(true)} style={{ backgroundColor:"#0F172A", paddingHorizontal:28, paddingVertical:12, borderRadius:16 }}>
-                <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(14), color:"#06B6D4" }}>Go Online Now</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* RECENT JOBS */}
+          {/* RECENT JOBS SECTION */}
           {!loading && (
-            <View style={{ marginTop:28 }}>
+            <View style={{ marginTop:28, marginBottom:20 }}>
               <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
                 <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(18), color:"#0F172A" }}>Recent Jobs</Text>
                 <TouchableOpacity onPress={() => router.push("/(provider)/jobs" as any)} style={{ flexDirection:"row", alignItems:"center", gap:4 }}>
@@ -534,35 +510,7 @@ export default function ProviderDashboard() {
             </View>
           )}
 
-          {/* PERFORMANCE CARD */}
-          {!loading && profile && (
-            <View style={{ marginTop:20, marginBottom:8 }}>
-              <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:1}}
-                style={{ borderRadius:24, padding:24, overflow:"hidden" }}>
-                <View style={{ position:"absolute", top:-30, right:-30, width:120, height:120, borderRadius:60, backgroundColor:"rgba(6,182,212,0.08)" }} />
-                <View style={{ flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:16 }}>
-                  <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(16), color:"#fff" }}>📈 Your Performance</Text>
-                  <View style={{ backgroundColor:"rgba(6,182,212,0.15)", paddingHorizontal:10, paddingVertical:4, borderRadius:20 }}>
-                    <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:11, color:"#06B6D4" }}>All Time</Text>
-                  </View>
-                </View>
-                {[
-                  { label:"Completion Rate", value: profile.completion_rate ? `${profile.completion_rate}%` : "—",                                         color:"#06B6D4" },
-                  { label:"Total Earnings",  value: `${parseFloat(profile.total_earnings??'0').toFixed(2)} EGP`,                                           color:"#10B981" },
-                  { label:"Avg. Rating",     value: profile.average_rating ? `${parseFloat(profile.average_rating).toFixed(1)} ★ (${profile.total_reviews} reviews)` : "No reviews yet", color:"#F59E0B" },
-                  { label:"Available Balance",value:`${parseFloat(profile.available_balance??'0').toFixed(2)} EGP`,                                         color:"#8B5CF6" },
-                ].map(item => (
-                  <View key={item.label} style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingVertical:10, borderBottomWidth:1, borderBottomColor:"rgba(255,255,255,0.05)" }}>
-                    <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
-                      <View style={{ width:6, height:6, borderRadius:3, backgroundColor:item.color }} />
-                      <Text style={{ fontFamily:Typography.fonts.regular, fontSize:r.fs(13), color:"rgba(255,255,255,0.55)" }}>{item.label}</Text>
-                    </View>
-                    <Text style={{ fontFamily:Typography.fonts.bold, fontSize:r.fs(13), color:item.color }}>{item.value}</Text>
-                  </View>
-                ))}
-              </LinearGradient>
-            </View>
-          )}
+          {/* REMOVED: The entire Performance Card with toggle is GONE */}
 
         </View>
       </ScrollView>

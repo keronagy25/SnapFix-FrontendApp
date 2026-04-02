@@ -14,7 +14,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { Typography }   from "@/theme/typography";
 import {
-  getIncomingJobs, getMyJobs, getOpenJobs,
+  getIncomingJobs, getBookings, getOpenJobs,
   acceptJob, declineJob, startJob,
   completeJob, providerCancelJob, pickJob,
   type ServiceRequest,
@@ -327,7 +327,7 @@ export default function ProviderJobsScreen() {
       const [open, inc, jobs] = await Promise.all([
         getOpenJobs(token),
         getIncomingJobs(token),
-        getMyJobs(token),
+        getBookings(token),
       ]);
       setOpenJobs(open);
       setIncoming(inc);
