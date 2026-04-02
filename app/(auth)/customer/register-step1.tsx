@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { User, Mail, Phone, ArrowLeft, AlertCircle } from "lucide-react-native";
+import { User, Mail, Phone, ArrowLeft, AlertCircle } from "@/components/ui/lucide-icon";
 import { Typography } from "@/theme/typography";
 
 const StepProgress = ({ current, total }: { current: number; total: number }) => (

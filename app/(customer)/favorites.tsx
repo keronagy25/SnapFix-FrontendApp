@@ -8,7 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { router }         from "expo-router";
 import {
   Heart, Star, User, AlertCircle, RefreshCw, CheckCircle,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }   from "@/store/authStore";
 import { Typography }     from "@/theme/typography";
 import {

@@ -12,10 +12,16 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "NPM_EXTRA_ARGS": "--legacy-peer-deps"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "NPM_EXTRA_ARGS": "--legacy-peer-deps"
+      }
     }
   },
   "submit": {

@@ -10,7 +10,7 @@ import {
   ArrowLeft, MapPin, Calendar, Clock, DollarSign,
   FileText, Tag, CheckCircle, XCircle, Play, Flag,
   AlertCircle, RefreshCw, Star,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }  from "@/store/authStore";
 import { Typography }    from "@/theme/typography";
 import {

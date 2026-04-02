@@ -11,7 +11,7 @@ import {
   ArrowLeft, MapPin, Clock, Navigation,
   Building2, AlertCircle, RefreshCw,
   LocateFixed, Star, ChevronRight, Info,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }   from "@/store/authStore";
 import { Typography }     from "@/theme/typography";
 import {

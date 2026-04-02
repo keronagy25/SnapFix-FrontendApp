@@ -12,7 +12,7 @@ import {
   HelpCircle, LogOut, Shield, Gift, MessageCircle,
   Zap, Clock, Star,
   Building2, Heart,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }    from "@/store/authStore";
 import { Typography }      from "@/theme/typography";
 import { getCategories, type Category } from "@/services/coreService";

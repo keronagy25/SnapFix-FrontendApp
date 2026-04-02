@@ -9,7 +9,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, ChevronDown, CheckCircle, Zap,
   Calendar, Clock, ChevronLeft, ChevronRight, AlertCircle,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }  from "@/store/authStore";
 import { Typography }    from "@/theme/typography";
 import { getCategories, getRegions, type Category, type Region } from "@/services/coreService";

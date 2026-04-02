@@ -10,7 +10,7 @@ import {
   CheckCircle, XCircle, Play, Flag, Zap,
   MapPin, Calendar, Clock, DollarSign,
   AlertCircle, RefreshCw, ChevronRight,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore } from "@/store/authStore";
 import { Typography }   from "@/theme/typography";
 import {

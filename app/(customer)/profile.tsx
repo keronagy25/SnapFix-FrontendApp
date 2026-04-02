@@ -10,7 +10,7 @@ import {
   User, Mail, Phone, BookOpen, LogOut,
   ChevronRight, AlertCircle, RefreshCw, Settings,
   HelpCircle, Shield, Building2, Edit3, X, Save,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }        from "@/store/authStore";
 import { Typography }          from "@/theme/typography";
 import { getCustomerProfile, updateCustomerProfile, type CustomerProfile, type UpdateCustomerPayload } from "@/services/customerService";

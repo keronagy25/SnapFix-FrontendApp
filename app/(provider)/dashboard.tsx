@@ -14,7 +14,7 @@ import {
   Menu, X, Home, BookOpen, User, Settings,
   HelpCircle, LogOut, Shield, Wallet, BarChart2,
   MessageCircle, RefreshCw, Calendar, Building2,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }       from "@/store/authStore";
 import { Typography }         from "@/theme/typography";
 import { getProviderProfile } from "@/services/providerService";

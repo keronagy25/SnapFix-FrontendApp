@@ -6,7 +6,7 @@ import {
 import { Tabs } from "expo-router";
 import {
   LayoutDashboard, Briefcase, Wallet, MessageCircle, User,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 
 const C = {
   bg:     "#0F172A",

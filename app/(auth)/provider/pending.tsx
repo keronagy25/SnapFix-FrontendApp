@@ -11,7 +11,7 @@ import {
   Clock, Shield, CheckCircle, ArrowLeft, RefreshCw,
   Mail, XCircle, Building2, MapPin, Navigation,
   LocateFixed, Star, AlertCircle, Info,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { Typography }         from "@/theme/typography";
 import { useAuthStore }       from "@/store/authStore";
 import { getProviderProfile } from "@/services/providerService";

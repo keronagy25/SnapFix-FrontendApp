@@ -6,7 +6,7 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
-import { Lock, ArrowLeft, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react-native";
+import { Lock, ArrowLeft, Eye, EyeOff, CheckCircle, AlertCircle } from "@/components/ui/lucide-icon";
 import { useAuthStore }     from "@/store/authStore";
 import { Typography }       from "@/theme/typography";
 import { customerRegister } from "@/services/authService";

@@ -14,7 +14,7 @@ import {
   Save, X, RefreshCw, AlertCircle,
   DollarSign, Shield, MapPin, TrendingUp,
   Award, BarChart2, Wallet, Camera,
-} from "lucide-react-native";
+} from "@/components/ui/lucide-icon";
 import { useAuthStore }          from "@/store/authStore";
 import { Typography }            from "@/theme/typography";
 import {
