@@ -61,15 +61,18 @@ export interface ServiceRequest {
   completed_at:         string | null;
   cancelled_at:         string | null;
   declined_at:          string | null;
+
+  // ✅ ADD THESE — tracking fields (null until provider sends location ping)
+  provider_distance_km:  number | null;
+  provider_eta_minutes:  number | null;
+  provider:              ProviderCard | null;  // ✅ move here from HistoryDetail
 }
 
 // History detail — role-aware (customer gets provider card, provider gets customer card)
 export interface HistoryDetail extends ServiceRequest {
-  // Customer token
-  provider?:             ProviderCard | null;
   is_favorite_provider?: boolean;
-  // Provider token
   customer?:             CustomerCard | null;
+  // provider is inherited from ServiceRequest as ProviderCard | null ✅
 }
 
 export interface CreateBookingPayload {
@@ -95,6 +98,27 @@ interface Paginated<T> {
   previous: string | null;
   results:  T[];
 }
+
+export interface TrackingInfo {
+  id:                   string;
+  status:               BookingStatus;
+  status_display:       string;
+  // Provider info (available after assignment)
+  provider:             ProviderCard | null;
+  // Location tracking (null until provider sends first ping)
+  provider_distance_km: number | null;
+  provider_eta_minutes: number | null;
+  // Timestamps
+  assigned_at:          string | null;
+  confirmed_at:         string | null;
+  started_at:           string | null;
+  completed_at:         string | null;
+  cancelled_at:         string | null;
+  cancelled_by_display: string;
+  cancellation_reason:  string;
+  decline_reason:       string;
+}
+
 
 /* ═══════════════════════════════════════════════════════════════
    SHARED ENDPOINTS (role-aware)
@@ -195,3 +219,6 @@ export const providerCancelJob = (id: string, token: string, reason?: string) =>
     method: "POST",
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
+
+export const getBookingTracking = (id: string, token: string) =>
+  apiRequest<TrackingInfo>(`/bookings/requests/${id}/`, { method: "GET" }, token);

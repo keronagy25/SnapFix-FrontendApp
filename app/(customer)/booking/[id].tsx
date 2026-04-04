@@ -30,7 +30,7 @@ const STATUS: Record<BookingStatus, { label:string; color:string; bg:string; ico
 };
 
 const canCancel: BookingStatus[] = ["pending","assigned","confirmed","in_progress"];
-
+const canTrack: BookingStatus[] = ["assigned", "confirmed", "in_progress"];
 function getApiError(err: any, fallback = "Something went wrong."): string {
   const tryExtract = (v: any): string => {
     if (!v) return "";
@@ -390,6 +390,85 @@ export default function BookingDetailScreen() {
                 <View style={{ paddingVertical:16, alignItems:"center", flexDirection:"row", justifyContent:"center", gap:8, backgroundColor:"#FEF2F2", borderWidth:1.5, borderColor:"#FECACA", borderRadius:18 }}>
                   {cancelling ? <ActivityIndicator size="small" color="#EF4444" />
                     : <><XCircle size={18} color="#EF4444" /><Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#EF4444" }}>Cancel Booking</Text></>}
+                </View>
+              </TouchableOpacity>
+            </View>
+          )}
+                    {/* ── Track Request Button ──────────────────────────── */}
+          {canTrack.includes(booking.status) && (
+            <View style={{ marginTop: 24 }}>
+              <TouchableOpacity
+                onPress={() =>
+                  router.push(`/(customer)/booking/track?bookingId=${id}`)
+                }
+                activeOpacity={0.85}
+                style={{ borderRadius: 18 }}
+              >
+                <LinearGradient
+                  colors={["#1E3A8A", "#1E40AF"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={{
+                    paddingVertical:  16,
+                    alignItems:       "center",
+                    flexDirection:    "row",
+                    justifyContent:   "center",
+                    gap:              8,
+                    borderRadius:     18,
+                  }}
+                >
+                  <MapPin size={18} color="#fff" />
+                  <Text
+                    style={{
+                      fontFamily: Typography.fonts.bold,
+                      fontSize:   15,
+                      color:      "#fff",
+                    }}
+                  >
+                    Track Request
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {/* ── Cancel Button ─────────────────────────────────── */}
+          {canCancel.includes(booking.status) && (
+            <View style={{ marginTop: 12 }}>  {/* ✅ changed from 24 → 12 since track btn above */}
+              <TouchableOpacity
+                onPress={() => setShowConfirm(true)}
+                disabled={cancelling}
+                activeOpacity={0.85}
+                style={{ borderRadius: 18, opacity: cancelling ? 0.7 : 1 }}
+              >
+                <View
+                  style={{
+                    paddingVertical:  16,
+                    alignItems:       "center",
+                    flexDirection:    "row",
+                    justifyContent:   "center",
+                    gap:              8,
+                    backgroundColor:  "#FEF2F2",
+                    borderWidth:      1.5,
+                    borderColor:      "#FECACA",
+                    borderRadius:     18,
+                  }}
+                >
+                  {cancelling
+                    ? <ActivityIndicator size="small" color="#EF4444" />
+                    : <>
+                        <XCircle size={18} color="#EF4444" />
+                        <Text
+                          style={{
+                            fontFamily: Typography.fonts.bold,
+                            fontSize:   15,
+                            color:      "#EF4444",
+                          }}
+                        >
+                          Cancel Booking
+                        </Text>
+                      </>
+                  }
                 </View>
               </TouchableOpacity>
             </View>

@@ -39,6 +39,7 @@ const FILTERS: { key:BookingStatus|"all"; label:string }[] = [
 ];
 
 const canCancel: BookingStatus[] = ["pending","assigned","confirmed","in_progress"];
+const canTrack: BookingStatus[]  = ["assigned","confirmed","in_progress"];
 
 function getApiError(err: any, fallback = "Something went wrong."): string {
   const tryExtract = (v: any): string => {
@@ -115,7 +116,13 @@ function BookingCard({ booking, onCancel }: { booking:ServiceRequest; onCancel:(
   return (
     <View style={{ marginBottom:12 }}>
       <View style={{ backgroundColor:"#fff", borderRadius:20, borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:3}, shadowOpacity:0.07, shadowRadius:12, elevation:3, overflow:"hidden" }}>
-        <TouchableOpacity activeOpacity={0.88} onPress={() => router.push(`/(customer)/booking/${booking.id}` as any)} style={{ padding:16 }}>
+        
+        {/* ── Card body (keep exactly as is) ───────────────── */}
+        <TouchableOpacity 
+          activeOpacity={0.88} 
+          onPress={() => router.push(`/(customer)/booking/${booking.id}` as any)} 
+          style={{ padding:16 }}
+        >
           <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
             <View style={{ flex:1, marginRight:10 }}>
               {booking.is_urgent && (
@@ -158,13 +165,74 @@ function BookingCard({ booking, onCancel }: { booking:ServiceRequest; onCancel:(
           </View>
         </TouchableOpacity>
 
-        {canCancel.includes(booking.status) && (
-          <TouchableOpacity onPress={() => onCancel(booking.id)} activeOpacity={0.75}
-            style={{ borderTopWidth:1, borderTopColor:"#FEE2E2", backgroundColor:"#FFF5F5", paddingVertical:11, paddingHorizontal:16, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:6 }}>
-            <XCircle size={14} color="#EF4444" />
-            <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:13, color:"#EF4444" }}>Cancel Booking</Text>
-          </TouchableOpacity>
+        {/* ── Action buttons row ────────────────────────────── */}
+        {(canTrack.includes(booking.status) || canCancel.includes(booking.status)) && (
+          <View style={{ 
+            flexDirection:   "row", 
+            borderTopWidth:  1, 
+            borderTopColor:  "#F1F5F9",
+          }}>
+
+            {/* Track button — only for assigned/confirmed/in_progress */}
+            {canTrack.includes(booking.status) && (
+              <TouchableOpacity
+                onPress={() => router.push(`/(customer)/booking/track?bookingId=${booking.id}` as any)}
+                activeOpacity={0.75}
+                style={{
+                  flex:            1,
+                  flexDirection:   "row",
+                  alignItems:      "center",
+                  justifyContent:  "center",
+                  gap:             6,
+                  paddingVertical: 11,
+                  backgroundColor: "#EFF6FF",
+                  // rounded bottom-left only when cancel also showing
+                  borderBottomLeftRadius: canCancel.includes(booking.status) ? 0 : 20,
+                  // divider between track & cancel
+                  borderRightWidth: canCancel.includes(booking.status) ? 1 : 0,
+                  borderRightColor: "#DBEAFE",
+                }}
+              >
+                <MapPin size={14} color="#3B82F6" />
+                <Text style={{ 
+                  fontFamily: Typography.fonts.semibold, 
+                  fontSize:   13, 
+                  color:      "#3B82F6",
+                }}>
+                  Track
+                </Text>
+              </TouchableOpacity>
+            )}
+
+            {/* Cancel button — only for pending/assigned/confirmed/in_progress */}
+            {canCancel.includes(booking.status) && (
+              <TouchableOpacity
+                onPress={() => onCancel(booking.id)}
+                activeOpacity={0.75}
+                style={{
+                  flex:            1,
+                  flexDirection:   "row",
+                  alignItems:      "center",
+                  justifyContent:  "center",
+                  gap:             6,
+                  paddingVertical: 11,
+                  backgroundColor: "#FFF5F5",
+                }}
+              >
+                <XCircle size={14} color="#EF4444" />
+                <Text style={{ 
+                  fontFamily: Typography.fonts.semibold, 
+                  fontSize:   13, 
+                  color:      "#EF4444",
+                }}>
+                  Cancel
+                </Text>
+              </TouchableOpacity>
+            )}
+
+          </View>
         )}
+
       </View>
     </View>
   );
