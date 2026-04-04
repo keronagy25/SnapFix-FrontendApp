@@ -1,4 +1,5 @@
 import { apiRequest } from "./api";
+import { applyTrackingMetricsToBooking } from "@/utils/trackingGeo";
 
 /* ═══════════════════════════════════════════════════════════════
    TYPES
@@ -23,6 +24,9 @@ export interface ProviderCard {
   total_reviews:   number;
   completion_rate: number;
   profile_picture: string | null;
+  /** Present when API exposes last known position (used for client-side distance). */
+  latitude?:       number | string | null;
+  longitude?:      number | string | null;
 }
 
 export interface CustomerCard {
@@ -99,27 +103,6 @@ interface Paginated<T> {
   results:  T[];
 }
 
-export interface TrackingInfo {
-  id:                   string;
-  status:               BookingStatus;
-  status_display:       string;
-  // Provider info (available after assignment)
-  provider:             ProviderCard | null;
-  // Location tracking (null until provider sends first ping)
-  provider_distance_km: number | null;
-  provider_eta_minutes: number | null;
-  // Timestamps
-  assigned_at:          string | null;
-  confirmed_at:         string | null;
-  started_at:           string | null;
-  completed_at:         string | null;
-  cancelled_at:         string | null;
-  cancelled_by_display: string;
-  cancellation_reason:  string;
-  decline_reason:       string;
-}
-
-
 /* ═══════════════════════════════════════════════════════════════
    SHARED ENDPOINTS (role-aware)
 ═══════════════════════════════════════════════════════════════ */
@@ -135,8 +118,13 @@ export const getBookings = async (token: string, status?: string): Promise<Servi
 };
 
 // GET /api/v1/bookings/requests/<id>/
-export const getBookingById = (id: string, token: string) =>
-  apiRequest<ServiceRequest>(`/bookings/requests/${id}/`, { method:"GET" }, token);
+export const getBookingById = async (id: string, token: string): Promise<ServiceRequest> => {
+  const raw = await apiRequest<ServiceRequest>(`/bookings/requests/${id}/`, { method: "GET" }, token);
+  return applyTrackingMetricsToBooking(raw as Record<string, unknown>) as ServiceRequest;
+};
+
+/** Poll this for live tracking — same payload as getBookingById (distance/ETA after provider location ping). */
+export const getBookingTracking = getBookingById;
 
 // GET /api/v1/bookings/history/<id>/
 export const getHistoryDetail = (id: string, token: string) =>
@@ -154,11 +142,13 @@ export const createBooking = (payload: CreateBookingPayload, token: string) =>
   }, token);
 
 // POST /api/v1/bookings/requests/<id>/cancel/
-export const cancelBooking = (id: string, token: string, reason?: string) =>
-  apiRequest<ServiceRequest>(`/bookings/requests/${id}/cancel/`, {
+export const cancelBooking = async (id: string, token: string, reason?: string) => {
+  const raw = await apiRequest<ServiceRequest>(`/bookings/requests/${id}/cancel/`, {
     method: "POST",
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
+  return applyTrackingMetricsToBooking(raw as Record<string, unknown>) as ServiceRequest;
+};
 
 // POST /api/v1/bookings/requests/<id>/rate/
 export const rateBooking = (id: string, token: string, rating: number, comment?: string) =>
@@ -219,6 +209,3 @@ export const providerCancelJob = (id: string, token: string, reason?: string) =>
     method: "POST",
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
-
-export const getBookingTracking = (id: string, token: string) =>
-  apiRequest<TrackingInfo>(`/bookings/requests/${id}/`, { method: "GET" }, token);

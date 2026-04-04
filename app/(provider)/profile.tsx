@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
@@ -6,7 +6,8 @@ import {
   ImageBackground, Modal, Switch,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
-import * as Location from 'expo-location';
+import * as Location from "expo-location";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -42,6 +43,9 @@ const roundCoordinates = (lat: number, lng: number) => {
     longitude: parseFloat(lng.toFixed(6)),
   };
 };
+
+/** Persisted preference: GPS pings every 30s for customer tracking (independent of “available for jobs”). */
+const SHARE_LIVE_LOCATION_KEY = "@snapfix_provider_share_live_location";
 
 /* ══════════════════════════════════════════════════════════════════
    SUB-COMPONENTS
@@ -131,7 +135,7 @@ function EditField({ label, value, onChange, multiline = false, keyboardType = "
   );
 }
 
-// Location Detection Modal (Same as create screen)
+// Location via GPS only — no map required (expo-location on native, browser geolocation on web).
 function LocationDetectModal({
   visible,
   onSelect,
@@ -147,9 +151,16 @@ function LocationDetectModal({
 }) {
   const [detectingLocation, setDetectingLocation] = useState(false);
   const [address, setAddress] = useState<string>("");
-  const [latitude, setLatitude] = useState<number | null>(initialLat || null);
-  const [longitude, setLongitude] = useState<number | null>(initialLng || null);
+  const [latitude, setLatitude] = useState<number | null>(initialLat ?? null);
+  const [longitude, setLongitude] = useState<number | null>(initialLng ?? null);
   const [loadingAddress, setLoadingAddress] = useState(false);
+
+  useEffect(() => {
+    if (!visible) return;
+    setLatitude(initialLat ?? null);
+    setLongitude(initialLng ?? null);
+    setAddress("");
+  }, [visible, initialLat, initialLng]);
 
   const reverseGeocode = async (lat: number, lng: number) => {
     setLoadingAddress(true);
@@ -175,31 +186,48 @@ function LocationDetectModal({
   const detectCurrentLocation = async () => {
     setDetectingLocation(true);
     try {
-      if (!navigator.geolocation) {
-        Alert.alert("Error", "Geolocation is not supported");
-        return;
+      let lat: number;
+      let lng: number;
+
+      if (Platform.OS === "web") {
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
+          Alert.alert("Not supported", "Geolocation is not available in this browser.");
+          return;
+        }
+        const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 15000,
+            maximumAge: 0,
+          });
+        });
+        lat = position.coords.latitude;
+        lng = position.coords.longitude;
+      } else {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          Alert.alert(
+            "Location permission",
+            "Allow SnapFix to use your location so we can set your position without opening a map.",
+          );
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.High,
+        });
+        lat = loc.coords.latitude;
+        lng = loc.coords.longitude;
       }
 
-      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-        navigator.geolocation.getCurrentPosition(resolve, reject, {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 0,
-        });
-      });
-
-      const { latitude: lat, longitude: lng } = position.coords;
       const rounded = roundCoordinates(lat, lng);
-      
       setLatitude(rounded.latitude);
       setLongitude(rounded.longitude);
       await reverseGeocode(rounded.latitude, rounded.longitude);
-      Alert.alert("Location Detected", "Your current location has been detected.");
     } catch (error: any) {
       let errorMessage = "Failed to detect location.";
-      if (error.code === 1) errorMessage = "Location permission denied.";
-      else if (error.code === 2) errorMessage = "Location unavailable.";
-      else if (error.code === 3) errorMessage = "Location request timed out.";
+      if (error?.code === 1) errorMessage = "Location permission denied.";
+      else if (error?.code === 2) errorMessage = "Location unavailable.";
+      else if (error?.code === 3) errorMessage = "Location request timed out.";
       Alert.alert("Error", errorMessage);
     } finally {
       setDetectingLocation(false);
@@ -226,7 +254,7 @@ function LocationDetectModal({
             <TouchableOpacity onPress={onClose} style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" }}>
               <X size={20} color="#fff" />
             </TouchableOpacity>
-            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 18, color: "#fff" }}>Detect Location</Text>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 18, color: "#fff" }}>Use GPS location</Text>
             <View style={{ width: 40 }} />
           </View>
         </LinearGradient>
@@ -256,7 +284,7 @@ function LocationDetectModal({
                   Detect Current Location
                 </Text>
                 <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "rgba(255,255,255,0.7)", marginTop: 8, textAlign: "center" }}>
-                  Use GPS to get your current location
+                  No map needed — one tap uses your device GPS
                 </Text>
               </>
             )}
@@ -313,89 +341,103 @@ function LocationDetectModal({
   );
 }
 
-// Location Tracker Component (Updates every 60 seconds using expo-location)
-function LocationTracker({ isActive, onLocationUpdate }: { isActive: boolean; onLocationUpdate?: (lat: number, lng: number) => void }) {
+const LOCATION_PING_MS = 30_000;
+
+/** Sends PATCH /providers/me/location/ immediately, then every 30s while `isActive` (refs avoid stale closures). */
+function LocationTracker({
+  isActive,
+  onLocationUpdate,
+}: {
+  isActive: boolean;
+  onLocationUpdate?: (lat: number, lng: number) => void;
+}) {
   const token = useAuthStore((s) => s.token);
   const [isTracking, setIsTracking] = useState(false);
   const [lastLocation, setLastLocation] = useState<{ lat: number; lng: number; time: Date } | null>(null);
   const [trackingError, setTrackingError] = useState<string | null>(null);
   const [showStatus, setShowStatus] = useState(false);
-  const intervalRef = useRef<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isActiveRef = useRef(isActive);
+  const tokenRef = useRef(token);
+  isActiveRef.current = isActive;
+  tokenRef.current = token;
 
-  const sendLocation = async (latitude: number, longitude: number) => {
-    if (!token || !isActive) return;
-
-    try {
-      const rounded = roundCoordinates(latitude, longitude);
-      await updateProviderLocation(rounded.latitude, rounded.longitude, token);
-      setLastLocation({ lat: rounded.latitude, lng: rounded.longitude, time: new Date() });
-      setTrackingError(null);
-      onLocationUpdate?.(rounded.latitude, rounded.longitude);
-      console.log('[LocationTracker] Location sent:', rounded);
-    } catch (err: any) {
-      console.error('[LocationTracker] Location update failed:', err);
-      setTrackingError(err?.data?.detail || 'Failed to update location');
-    }
-  };
-
-  // Using expo-location instead of navigator.geolocation
-  const getCurrentLocation = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setTrackingError('Location permission denied');
-        return;
-      }
-
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      const { latitude, longitude } = location.coords;
-      await sendLocation(latitude, longitude);
-    } catch (err) {
-      console.error('[LocationTracker] Error getting location:', err);
-      setTrackingError('Failed to get current location');
-    }
-  };
-
-  const startTracking = () => {
-    if (!isActive) return;
-
-    setIsTracking(true);
-    console.log('[LocationTracker] Starting location tracking (every 60 seconds)');
-    
-    // Send initial location immediately
-    getCurrentLocation();
-
-    // Set up interval for periodic updates (every 60 seconds)
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(() => {
-      if (isActive) {
-        console.log('[LocationTracker] Scheduled location update');
-        getCurrentLocation();
-      }
-    }, 60000) as unknown as number;
-  };
-
-  const stopTracking = () => {
+  const stopTracking = useCallback(() => {
     setIsTracking(false);
-    console.log('[LocationTracker] Stopping location tracking');
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
-  };
+  }, []);
+
+  const sendLocation = useCallback(async (latitude: number, longitude: number) => {
+    const t = tokenRef.current;
+    if (!t || !isActiveRef.current) return;
+    try {
+      const rounded = roundCoordinates(latitude, longitude);
+      await updateProviderLocation(rounded.latitude, rounded.longitude, t);
+      setLastLocation({ lat: rounded.latitude, lng: rounded.longitude, time: new Date() });
+      setTrackingError(null);
+      onLocationUpdate?.(rounded.latitude, rounded.longitude);
+    } catch (err: any) {
+      const msg =
+        typeof err?.data?.detail === "string"
+          ? err.data.detail
+          : "Failed to update location";
+      setTrackingError(msg);
+    }
+  }, [onLocationUpdate]);
+
+  const getCurrentLocation = useCallback(async () => {
+    if (!isActiveRef.current || !tokenRef.current) return;
+    try {
+      if (Platform.OS === "web") {
+        if (typeof navigator === "undefined" || !navigator.geolocation) {
+          setTrackingError("Geolocation not available");
+          return;
+        }
+        await new Promise<void>((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(
+            async (pos) => {
+              await sendLocation(pos.coords.latitude, pos.coords.longitude);
+              resolve();
+            },
+            reject,
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 },
+          );
+        });
+        return;
+      }
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") {
+        setTrackingError("Location permission denied");
+        return;
+      }
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      await sendLocation(location.coords.latitude, location.coords.longitude);
+    } catch {
+      setTrackingError("Failed to get current location");
+    }
+  }, [sendLocation]);
 
   useEffect(() => {
-    if (isActive) {
-      startTracking();
-    } else {
+    if (!isActive || !token) {
       stopTracking();
+      return;
     }
 
+    setIsTracking(true);
+    void getCurrentLocation();
+
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(() => {
+      if (isActiveRef.current && tokenRef.current) void getCurrentLocation();
+    }, LOCATION_PING_MS);
+
     return () => stopTracking();
-  }, [isActive, token]);
+  }, [isActive, token, getCurrentLocation, stopTracking]);
 
   if (!isActive) return null;
 
@@ -451,7 +493,7 @@ function LocationTracker({ isActive, onLocationUpdate }: { isActive: boolean; on
             )}
 
             <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: '#64748B', marginBottom: 16, textAlign: 'center' }}>
-              Location updates every 60 seconds while available
+              Location updates every {LOCATION_PING_MS / 1000} seconds while sharing is on (for customer tracking).
             </Text>
 
             <TouchableOpacity
@@ -494,7 +536,7 @@ export default function ProviderProfileScreen() {
   const [saving, setSaving] = useState(false);
   const [editErrors, setEditErrors] = useState<Record<string, string>>({});
   const [locationDetectOpen, setLocationDetectOpen] = useState(false);
-  const [isTrackingActive, setIsTrackingActive] = useState(false);
+  const [shareLiveLocation, setShareLiveLocationState] = useState(false);
   const [currentLiveLocation, setCurrentLiveLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [uploadingPicture, setUploadingPicture] = useState(false);
 
@@ -513,7 +555,7 @@ export default function ProviderProfileScreen() {
     profile_picture_uri: "",
   });
 
-  const fetchProfile = async (isRefresh = false) => {
+  const fetchProfile = useCallback(async (isRefresh = false) => {
     if (!token) return;
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
@@ -521,16 +563,85 @@ export default function ProviderProfileScreen() {
       const data = await getProviderProfile(token);
       setProfile(data);
       setUser({ ...data, role: "provider" } as any);
-      setIsTrackingActive(data.is_available);
     } catch (err: any) {
       setError(err?.data?.detail ?? err?.message ?? "Failed to load profile.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [token, setUser]);
 
-  useEffect(() => { fetchProfile(); }, [token]);
+  useEffect(() => {
+    void fetchProfile();
+  }, [fetchProfile]);
+
+  useEffect(() => {
+    AsyncStorage.getItem(SHARE_LIVE_LOCATION_KEY).then((v) => {
+      setShareLiveLocationState(v === "1");
+    });
+  }, []);
+
+  const setShareLiveLocation = useCallback(async (value: boolean) => {
+    setShareLiveLocationState(value);
+    await AsyncStorage.setItem(SHARE_LIVE_LOCATION_KEY, value ? "1" : "0");
+  }, []);
+
+  const onToggleShareLiveLocation = useCallback(
+    async (
+      value: boolean,
+      seed?: { lat: number; lng: number } | null,
+    ) => {
+      if (!token) return;
+      if (!value) {
+        await setShareLiveLocation(false);
+        return;
+      }
+      const lat0 = seed?.lat ?? profile?.latitude ?? null;
+      const lng0 = seed?.lng ?? profile?.longitude ?? null;
+      const hasCoords =
+        lat0 != null &&
+        lng0 != null &&
+        Number.isFinite(lat0) &&
+        Number.isFinite(lng0);
+      if (!hasCoords) {
+        try {
+          if (Platform.OS === "web") {
+            Alert.alert(
+              "Set location first",
+              "Open Edit profile, tap “Use GPS location”, then save. Or enable sharing after saving coordinates.",
+            );
+            return;
+          }
+          const { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== "granted") {
+            Alert.alert(
+              "Permission needed",
+              "Allow location so we can share your position for job tracking.",
+            );
+            return;
+          }
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.High,
+          });
+          const r = roundCoordinates(loc.coords.latitude, loc.coords.longitude);
+          await updateProviderLocation(r.latitude, r.longitude, token);
+          await updateProviderProfile(
+            { latitude: r.latitude, longitude: r.longitude },
+            token,
+          );
+          await fetchProfile(true);
+        } catch {
+          Alert.alert(
+            "Could not read GPS",
+            "Open Edit profile, use “Use GPS location”, then save your profile.",
+          );
+          return;
+        }
+      }
+      await setShareLiveLocation(true);
+    },
+    [token, profile?.latitude, profile?.longitude, setShareLiveLocation, fetchProfile],
+  );
 
   const openEdit = () => {
     setEditForm({
@@ -616,7 +727,6 @@ export default function ProviderProfileScreen() {
       const updated = await updateProviderProfile(payload, token);
       setProfile(updated);
       setUser({ ...updated, role: "provider" } as any);
-      setIsTrackingActive(updated.is_available);
       setEditOpen(false);
       Alert.alert("✓ Saved", "Your profile has been updated successfully.");
     } catch (err: any) {
@@ -640,9 +750,9 @@ export default function ProviderProfileScreen() {
     }
   };
 
-  const handleLocationUpdate = (lat: number, lng: number) => {
+  const handleLocationUpdate = useCallback((lat: number, lng: number) => {
     setCurrentLiveLocation({ lat, lng });
-  };
+  }, []);
 
   const firstName = profile?.first_name ?? "Provider";
   const lastName = profile?.last_name ?? "";
@@ -680,8 +790,8 @@ export default function ProviderProfileScreen() {
     <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      {/* Location Tracker - Updates every 60 seconds when available */}
-      <LocationTracker isActive={isTrackingActive} onLocationUpdate={handleLocationUpdate} />
+      {/* Location Tracker — PATCH /providers/me/location/ every 30s when sharing is on */}
+      <LocationTracker isActive={shareLiveLocation} onLocationUpdate={handleLocationUpdate} />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -749,6 +859,24 @@ export default function ProviderProfileScreen() {
             <StatCard icon={DollarSign} label="Hourly Rate" value={`${profile?.hourly_rate ?? "—"} EGP`} color="#EC4899" />
           </View>
 
+          <SectionLabel label="CUSTOMER TRACKING" />
+          <Card>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 4 }}>
+              <View style={{ flex: 1, paddingRight: 12 }}>
+                <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 14, color: "#0F172A" }}>Share live location</Text>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#64748B", marginTop: 6, lineHeight: 18 }}>
+                  Updates your position every 30 seconds for active job tracking. Uses GPS only (no map). Edit coordinates anytime in Edit profile.
+                </Text>
+              </View>
+              <Switch
+                value={shareLiveLocation}
+                onValueChange={(v) => void onToggleShareLiveLocation(v)}
+                trackColor={{ false: "#E2E8F0", true: "#0EA5E9" }}
+                thumbColor="#fff"
+              />
+            </View>
+          </Card>
+
           {/* PERSONAL INFO */}
           <SectionLabel label="PERSONAL INFORMATION" />
           <Card>
@@ -772,7 +900,7 @@ export default function ProviderProfileScreen() {
           {/* LIVE LOCATION (if tracking active) */}
           {currentLiveLocation && (
             <>
-              <SectionLabel label="LIVE LOCATION (Every 60 sec)" />
+              <SectionLabel label="LIVE LOCATION (Every 30 sec)" />
               <Card>
                 <InfoRow icon={Activity} label="Current Lat" value={currentLiveLocation.lat.toFixed(6)} color="#10B981" />
                 <InfoRow icon={Activity} label="Current Lng" value={currentLiveLocation.lng.toFixed(6)} color="#10B981" last />
@@ -874,7 +1002,9 @@ export default function ProviderProfileScreen() {
               <EditField label="Address" value={editForm.address} error={editErrors.address} multiline
                 onChange={(v) => { setEditForm((f) => ({ ...f, address: v })); setEditErrors(e => ({ ...e, address: undefined as any })); }} />
 
-              {/* Latitude and Longitude Fields */}
+              <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 12, color: "#64748B", marginBottom: 8 }}>
+                Location (optional — edit anytime). Use GPS below; map is not required.
+              </Text>
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <View style={{ flex: 1 }}>
                   <EditField label="Latitude" value={editForm.latitude?.toString() ?? ""} error={editErrors.latitude}
@@ -888,7 +1018,6 @@ export default function ProviderProfileScreen() {
                 </View>
               </View>
 
-              {/* Detect Location Button */}
               <TouchableOpacity
                 onPress={() => setLocationDetectOpen(true)}
                 style={{
@@ -904,9 +1033,31 @@ export default function ProviderProfileScreen() {
               >
                 <Crosshair size={18} color="#fff" />
                 <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 14, color: "#fff" }}>
-                  Detect Current Location
+                  Use GPS location
                 </Text>
               </TouchableOpacity>
+
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 12, marginBottom: 8, backgroundColor: "#F8FAFC", borderRadius: 14, paddingHorizontal: 12, borderWidth: 1, borderColor: "#E2E8F0" }}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 14, color: "#0F172A" }}>Share live location</Text>
+                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#64748B", marginTop: 4 }}>
+                    Customer tracking: GPS ping every 30s. No map — same as the button above.
+                  </Text>
+                </View>
+                <Switch
+                  value={shareLiveLocation}
+                  onValueChange={(v) =>
+                    void onToggleShareLiveLocation(
+                      v,
+                      editForm.latitude != null && editForm.longitude != null
+                        ? { lat: editForm.latitude, lng: editForm.longitude }
+                        : undefined,
+                    )
+                  }
+                  trackColor={{ false: "#E2E8F0", true: "#0EA5E9" }}
+                  thumbColor="#fff"
+                />
+              </View>
 
               <View style={{ flexDirection: "row", gap: 10 }}>
                 <View style={{ flex: 1 }}>
@@ -930,10 +1081,7 @@ export default function ProviderProfileScreen() {
                 </View>
                 <Switch
                   value={editForm.is_available}
-                  onValueChange={(v) => {
-                    setEditForm(f => ({ ...f, is_available: v }));
-                    setIsTrackingActive(v);
-                  }}
+                  onValueChange={(v) => setEditForm((f) => ({ ...f, is_available: v }))}
                   trackColor={{ false: "#E2E8F0", true: "#10B981" }}
                   thumbColor="#fff"
                 />

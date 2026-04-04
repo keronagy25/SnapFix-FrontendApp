@@ -17,6 +17,7 @@ import {
   getBookingById, getHistoryDetail, cancelBooking, rateBooking,
   type ServiceRequest, type BookingStatus, type HistoryDetail,
 } from "@/services/bookingService";
+import { applyTrackingMetricsToBooking, formatEtaFromDistanceKm } from "@/utils/trackingGeo";
 import { toggleFavorite } from "@/services/customerService";
 
 const STATUS: Record<BookingStatus, { label:string; color:string; bg:string; icon:any; desc:string }> = {
@@ -171,7 +172,12 @@ export default function BookingDetailScreen() {
         getBookingById(id, token),
         getHistoryDetail(id, token).catch(() => null),
       ]);
-      setBooking(b);
+      let merged: ServiceRequest = {
+        ...b,
+        provider: b.provider ?? d?.provider ?? null,
+      };
+      merged = applyTrackingMetricsToBooking(merged as Record<string, unknown>) as ServiceRequest;
+      setBooking(merged);
       if (d) {
         setDetail(d);
         setIsFav(d.is_favorite_provider ?? false);
@@ -298,6 +304,30 @@ export default function BookingDetailScreen() {
             <Text style={{ fontFamily:Typography.fonts.medium, fontSize:13, color:s.color, flex:1 }}>{s.desc}</Text>
           </View>
 
+          {/* Live distance/ETA from GET /bookings/requests/<id>/ (after provider pings) — pull to refresh */}
+          {canTrack.includes(booking.status) &&
+            booking.provider_distance_km != null &&
+            Number(booking.provider_distance_km) > 0 && (
+            <View style={{ backgroundColor:"#EFF6FF", borderRadius:16, padding:14, marginTop:12, borderWidth:1, borderColor:"#BFDBFE", flexDirection:"row", alignItems:"center", justifyContent:"space-between" }}>
+              <View style={{ flex:1 }}>
+                <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:12, color:"#1E40AF", marginBottom:4 }}>Provider en route</Text>
+                <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#64748B" }}>
+                  Refreshes with your booking; provider GPS every ~30s. ETA is straight-line at 30 km/h.
+                </Text>
+              </View>
+              <View style={{ alignItems:"flex-end", marginLeft:12 }}>
+                <Text style={{ fontFamily:Typography.fonts.extrabold, fontSize:18, color:"#1E3A8A" }}>
+                  {Number(booking.provider_distance_km) < 100
+                    ? Number(booking.provider_distance_km).toFixed(2)
+                    : Number(booking.provider_distance_km).toFixed(1)} km
+                </Text>
+                <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:12, color:"#3B82F6", marginTop:2, textAlign:"right" }}>
+                  {formatEtaFromDistanceKm(Number(booking.provider_distance_km))}
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* Service details */}
           <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:11, color:"#94A3B8", letterSpacing:1.1, marginTop:22, marginBottom:10 }}>SERVICE DETAILS</Text>
           <View style={{ backgroundColor:"#fff", borderRadius:20, paddingHorizontal:16, borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:2}, shadowOpacity:0.05, shadowRadius:8, elevation:2 }}>
@@ -382,19 +412,7 @@ export default function BookingDetailScreen() {
             <Timeline booking={booking} />
           </View>
 
-          {/* Cancel button */}
-          {canCancel.includes(booking.status) && (
-            <View style={{ marginTop:24 }}>
-              <TouchableOpacity onPress={() => setShowConfirm(true)} disabled={cancelling} activeOpacity={0.85}
-                style={{ borderRadius:18, opacity:cancelling?0.7:1 }}>
-                <View style={{ paddingVertical:16, alignItems:"center", flexDirection:"row", justifyContent:"center", gap:8, backgroundColor:"#FEF2F2", borderWidth:1.5, borderColor:"#FECACA", borderRadius:18 }}>
-                  {cancelling ? <ActivityIndicator size="small" color="#EF4444" />
-                    : <><XCircle size={18} color="#EF4444" /><Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#EF4444" }}>Cancel Booking</Text></>}
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-                    {/* ── Track Request Button ──────────────────────────── */}
+          {/* ── Track Request (polls GET /bookings/requests/<id>/) ── */}
           {canTrack.includes(booking.status) && (
             <View style={{ marginTop: 24 }}>
               <TouchableOpacity
@@ -432,43 +450,13 @@ export default function BookingDetailScreen() {
             </View>
           )}
 
-          {/* ── Cancel Button ─────────────────────────────────── */}
           {canCancel.includes(booking.status) && (
-            <View style={{ marginTop: 12 }}>  {/* ✅ changed from 24 → 12 since track btn above */}
-              <TouchableOpacity
-                onPress={() => setShowConfirm(true)}
-                disabled={cancelling}
-                activeOpacity={0.85}
-                style={{ borderRadius: 18, opacity: cancelling ? 0.7 : 1 }}
-              >
-                <View
-                  style={{
-                    paddingVertical:  16,
-                    alignItems:       "center",
-                    flexDirection:    "row",
-                    justifyContent:   "center",
-                    gap:              8,
-                    backgroundColor:  "#FEF2F2",
-                    borderWidth:      1.5,
-                    borderColor:      "#FECACA",
-                    borderRadius:     18,
-                  }}
-                >
-                  {cancelling
-                    ? <ActivityIndicator size="small" color="#EF4444" />
-                    : <>
-                        <XCircle size={18} color="#EF4444" />
-                        <Text
-                          style={{
-                            fontFamily: Typography.fonts.bold,
-                            fontSize:   15,
-                            color:      "#EF4444",
-                          }}
-                        >
-                          Cancel Booking
-                        </Text>
-                      </>
-                  }
+            <View style={{ marginTop: canTrack.includes(booking.status) ? 12 : 24 }}>
+              <TouchableOpacity onPress={() => setShowConfirm(true)} disabled={cancelling} activeOpacity={0.85}
+                style={{ borderRadius:18, opacity:cancelling?0.7:1 }}>
+                <View style={{ paddingVertical:16, alignItems:"center", flexDirection:"row", justifyContent:"center", gap:8, backgroundColor:"#FEF2F2", borderWidth:1.5, borderColor:"#FECACA", borderRadius:18 }}>
+                  {cancelling ? <ActivityIndicator size="small" color="#EF4444" />
+                    : <><XCircle size={18} color="#EF4444" /><Text style={{ fontFamily:Typography.fonts.bold, fontSize:15, color:"#EF4444" }}>Cancel Booking</Text></>}
                 </View>
               </TouchableOpacity>
             </View>
