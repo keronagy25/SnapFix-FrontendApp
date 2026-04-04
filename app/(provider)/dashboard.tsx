@@ -14,6 +14,7 @@ import {
   Menu, X, Home, BookOpen, User, Settings,
   HelpCircle, LogOut, Shield, Wallet, BarChart2,
   MessageCircle, RefreshCw, Calendar, Building2,
+  Office,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore }       from "@/store/authStore";
 import { Typography }         from "@/theme/typography";
@@ -43,7 +44,7 @@ const DRAWER_MAIN = [
   { id:"wallet",    label:"Wallet",     icon:Wallet,        route:"/(provider)/wallet",    color:"#F59E0B" },
   { id:"chat",      label:"Messages",   icon:MessageCircle, route:"/(provider)/chat",      color:"#8B5CF6" },
   { id:"profile",   label:"My Profile", icon:User,          route:"/(provider)/profile",   color:"#64748B" },
-  { id:"offices",   label:"Our Offices", icon:Building2,     route:"/(provider)/offices",   color:"#06B6D4" },
+  { id:"offices",   label:"Our Offices", icon:Office,     route:"/(provider)/offices",   color:"#06B6D4" },
 ];
 
 function ProviderDrawer({ visible, onClose, user, activeRoute = "dashboard" }: {

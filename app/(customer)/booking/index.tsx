@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  RefreshControl, Modal,
+  RefreshControl, Modal, useWindowDimensions,
 } from "react-native";
 import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -40,6 +40,10 @@ const FILTERS: { key:BookingStatus|"all"; label:string }[] = [
 
 const canCancel: BookingStatus[] = ["pending","assigned","confirmed","in_progress"];
 const canTrack: BookingStatus[]  = ["assigned","confirmed","in_progress"];
+
+/** Tablet / desktop: show all filter chips without a single-line strip that collapses. */
+const WIDE_BREAKPOINT = 600;
+const CONTENT_MAX_WIDTH = 720;
 
 function getApiError(err: any, fallback = "Something went wrong."): string {
   const tryExtract = (v: any): string => {
@@ -110,11 +114,11 @@ function ConfirmModal({ title, msg, onConfirm, onClose }: { title:string; msg:st
 }
 
 /* ─── Booking card ────────────────────────────────────────────── */
-function BookingCard({ booking, onCancel }: { booking:ServiceRequest; onCancel:(id:string)=>void }) {
+function BookingCard({ booking, onCancel, isWide }: { booking:ServiceRequest; onCancel:(id:string)=>void; isWide:boolean }) {
   const s = STATUS[booking.status] ?? STATUS.pending;
   const Icon = s.icon;
   return (
-    <View style={{ marginBottom:12 }}>
+    <View style={{ marginBottom:12, width:"100%" }}>
       <View style={{ backgroundColor:"#fff", borderRadius:20, borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:3}, shadowOpacity:0.07, shadowRadius:12, elevation:3, overflow:"hidden" }}>
         
         {/* ── Card body (keep exactly as is) ───────────────── */}
@@ -139,14 +143,16 @@ function BookingCard({ booking, onCancel }: { booking:ServiceRequest; onCancel:(
               <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:11, color:s.color }}>{s.label}</Text>
             </View>
           </View>
-          <View style={{ flexDirection:"row", gap:16, marginBottom:12 }}>
+          <View style={{ flexDirection: isWide ? "column" : "row", gap: isWide ? 8 : 16, marginBottom:12 }}>
             <View style={{ flexDirection:"row", alignItems:"center", gap:5 }}>
               <Calendar size={13} color="#94A3B8" />
               <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#64748B" }}>{booking.preferred_date}</Text>
             </View>
-            <View style={{ flexDirection:"row", alignItems:"center", gap:5, flex:1 }}>
-              <MapPin size={13} color="#94A3B8" />
-              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#64748B" }} numberOfLines={1}>{booking.region?.name} · {booking.address}</Text>
+            <View style={{ flexDirection:"row", alignItems:"flex-start", gap:5, flex: isWide ? undefined : 1 }}>
+              <MapPin size={13} color="#94A3B8" style={{ marginTop:2 }} />
+              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:12, color:"#64748B", flex:1 }} numberOfLines={isWide ? 3 : 2}>
+                {booking.region?.name} · {booking.address}
+              </Text>
             </View>
           </View>
           <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
@@ -167,63 +173,65 @@ function BookingCard({ booking, onCancel }: { booking:ServiceRequest; onCancel:(
 
         {/* ── Action buttons row ────────────────────────────── */}
         {(canTrack.includes(booking.status) || canCancel.includes(booking.status)) && (
-          <View style={{ 
-            flexDirection:   "row", 
-            borderTopWidth:  1, 
-            borderTopColor:  "#F1F5F9",
+          <View style={{
+            flexDirection: "row",
+            borderTopWidth: 1,
+            borderTopColor: "#F1F5F9",
           }}>
 
-            {/* Track button — only for assigned/confirmed/in_progress */}
             {canTrack.includes(booking.status) && (
               <TouchableOpacity
                 onPress={() => router.push(`/(customer)/booking/track?bookingId=${booking.id}` as any)}
                 activeOpacity={0.75}
                 style={{
-                  flex:            1,
-                  flexDirection:   "row",
-                  alignItems:      "center",
-                  justifyContent:  "center",
-                  gap:             6,
-                  paddingVertical: 11,
+                  flex: 1,
+                  minWidth: isWide ? 120 : undefined,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
                   backgroundColor: "#EFF6FF",
-                  // rounded bottom-left only when cancel also showing
                   borderBottomLeftRadius: canCancel.includes(booking.status) ? 0 : 20,
-                  // divider between track & cancel
                   borderRightWidth: canCancel.includes(booking.status) ? 1 : 0,
                   borderRightColor: "#DBEAFE",
                 }}
               >
                 <MapPin size={14} color="#3B82F6" />
-                <Text style={{ 
-                  fontFamily: Typography.fonts.semibold, 
-                  fontSize:   13, 
-                  color:      "#3B82F6",
+                <Text style={{
+                  fontFamily: Typography.fonts.semibold,
+                  fontSize: 13,
+                  color: "#3B82F6",
                 }}>
                   Track
                 </Text>
               </TouchableOpacity>
             )}
 
-            {/* Cancel button — only for pending/assigned/confirmed/in_progress */}
             {canCancel.includes(booking.status) && (
               <TouchableOpacity
                 onPress={() => onCancel(booking.id)}
                 activeOpacity={0.75}
                 style={{
-                  flex:            1,
-                  flexDirection:   "row",
-                  alignItems:      "center",
-                  justifyContent:  "center",
-                  gap:             6,
-                  paddingVertical: 11,
+                  flex: 1,
+                  minWidth: isWide ? 120 : undefined,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 6,
+                  paddingVertical: 12,
+                  paddingHorizontal: 8,
                   backgroundColor: "#FFF5F5",
+                  borderBottomLeftRadius: canTrack.includes(booking.status) ? 0 : 20,
+                  borderBottomRightRadius: 20,
                 }}
               >
                 <XCircle size={14} color="#EF4444" />
-                <Text style={{ 
-                  fontFamily: Typography.fonts.semibold, 
-                  fontSize:   13, 
-                  color:      "#EF4444",
+                <Text style={{
+                  fontFamily: Typography.fonts.semibold,
+                  fontSize: 13,
+                  color: "#EF4444",
                 }}>
                   Cancel
                 </Text>
@@ -238,8 +246,46 @@ function BookingCard({ booking, onCancel }: { booking:ServiceRequest; onCancel:(
   );
 }
 
+function FilterChip({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={{
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 20,
+        backgroundColor: active ? "#1E3A8A" : "#F1F5F9",
+        borderWidth: active ? 0 : 1,
+        borderColor: "#E2E8F0",
+      }}
+    >
+      <Text
+        style={{
+          fontFamily: active ? Typography.fonts.semibold : Typography.fonts.medium,
+          fontSize: 13,
+          color: active ? "#fff" : "#475569",
+        }}
+      >
+        {label}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function CustomerBookingsScreen() {
   const token = useAuthStore((s) => s.token);
+  const { width: windowWidth } = useWindowDimensions();
+  const isWide = windowWidth >= WIDE_BREAKPOINT;
+  const horizontalPad = Math.max(16, Math.min(24, windowWidth * 0.04));
 
   const [bookings,   setBookings]   = useState<ServiceRequest[]>([]);
   const [loading,    setLoading]    = useState(true);
@@ -294,35 +340,89 @@ export default function CustomerBookingsScreen() {
       )}
 
       <LinearGradient colors={["#1E3A8A","#1E40AF"]} start={{x:0,y:0}} end={{x:1,y:1}}
-        style={{ paddingTop:Platform.OS==="android"?48:60, paddingBottom:24, paddingHorizontal:20, overflow:"hidden" }}>
+        style={{ paddingTop:Platform.OS==="android"?48:60, paddingBottom:24, paddingHorizontal:horizontalPad, overflow:"hidden" }}>
         <View style={{ position:"absolute", top:-40, right:-30, width:160, height:160, borderRadius:80, backgroundColor:"rgba(6,182,212,0.08)" }} />
-        <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
-          <View>
-            <Text style={{ fontFamily:Typography.fonts.extrabold, fontSize:24, color:"#fff" }}>My Bookings</Text>
-            <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:2 }}>
-              {bookings.length} total request{bookings.length !== 1 ? "s" : ""}
-            </Text>
+        <View style={{ width:"100%", maxWidth:CONTENT_MAX_WIDTH, alignSelf:"center" }}>
+          <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center", gap:12 }}>
+            <View style={{ flex:1, minWidth:0 }}>
+              <Text style={{ fontFamily:Typography.fonts.extrabold, fontSize: isWide ? 28 : 24, color:"#fff" }}>My Bookings</Text>
+              <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:2 }} numberOfLines={1}>
+                {bookings.length} total request{bookings.length !== 1 ? "s" : ""}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push("/(customer)/booking/create" as any)}
+              style={{ width:48, height:48, borderRadius:16, backgroundColor:"#06B6D4", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+              <Plus size={24} color="#fff" />
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity onPress={() => router.push("/(customer)/booking/create" as any)}
-            style={{ width:44, height:44, borderRadius:15, backgroundColor:"#06B6D4", alignItems:"center", justifyContent:"center" }}>
-            <Plus size={22} color="#fff" />
-          </TouchableOpacity>
         </View>
       </LinearGradient>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal:16, paddingVertical:14, gap:8 }}
-        style={{ flexGrow:0, backgroundColor:"#fff", borderBottomWidth:1, borderBottomColor:"#F1F5F9" }}>
-        {FILTERS.map(f => {
-          const active = filter === f.key;
-          return (
-            <TouchableOpacity key={f.key} onPress={() => setFilter(f.key)}
-              style={{ paddingHorizontal:16, paddingVertical:8, borderRadius:20, backgroundColor:active?"#1E3A8A":"#F1F5F9" }}>
-              <Text style={{ fontFamily:active?Typography.fonts.semibold:Typography.fonts.regular, fontSize:13, color:active?"#fff":"#64748B" }}>{f.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {/* flexShrink:0 + minHeight stops this row collapsing when the list ScrollView grows (web / long lists). */}
+      <View
+        style={{
+          flexShrink: 0,
+          flexGrow: 0,
+          backgroundColor: "#fff",
+          borderBottomWidth: 1,
+          borderBottomColor: "#E2E8F0",
+          zIndex: 2,
+          elevation: 4,
+          shadowColor: "#0F172A",
+          shadowOffset: { width: 0, height: 1 },
+          shadowOpacity: Platform.OS === "ios" ? 0.06 : 0,
+          shadowRadius: 3,
+        }}
+      >
+        {isWide ? (
+          <View
+            style={{
+              width: "100%",
+              maxWidth: CONTENT_MAX_WIDTH,
+              alignSelf: "center",
+              paddingHorizontal: horizontalPad,
+              paddingVertical: 12,
+              flexDirection: "row",
+              flexWrap: "wrap",
+              gap: 8,
+            }}
+          >
+            {FILTERS.map((f) => (
+              <FilterChip
+                key={f.key}
+                label={f.label}
+                active={filter === f.key}
+                onPress={() => setFilter(f.key)}
+              />
+            ))}
+          </View>
+        ) : (
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            keyboardShouldPersistTaps="handled"
+            showsHorizontalScrollIndicator
+            style={{ minHeight: 52, maxHeight: 56 }}
+            contentContainerStyle={{
+              paddingHorizontal: horizontalPad,
+              paddingVertical: 12,
+              alignItems: "center",
+              flexDirection: "row",
+              gap: 8,
+              paddingRight: horizontalPad + 8,
+            }}
+          >
+            {FILTERS.map((f) => (
+              <FilterChip
+                key={f.key}
+                label={f.label}
+                active={filter === f.key}
+                onPress={() => setFilter(f.key)}
+              />
+            ))}
+          </ScrollView>
+        )}
+      </View>
 
       {loading ? (
         <View style={{ flex:1, alignItems:"center", justifyContent:"center" }}>
@@ -341,8 +441,19 @@ export default function CustomerBookingsScreen() {
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={{ padding:16, paddingBottom:100 }} showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchBookings(true)} tintColor="#1E3A8A" colors={["#1E3A8A"]} />}>
+        <ScrollView
+          style={{ flex: 1 }}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={{
+            paddingTop: 16,
+            paddingBottom: 100,
+            paddingHorizontal: horizontalPad,
+            flexGrow: 1,
+          }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchBookings(true)} tintColor="#1E3A8A" colors={["#1E3A8A"]} />}
+        >
+          <View style={{ width: "100%", maxWidth: CONTENT_MAX_WIDTH, alignSelf: "center" }}>
           {filtered.length === 0 ? (
             <View style={{ alignItems:"center", paddingTop:60 }}>
               <Text style={{ fontSize:56, marginBottom:16 }}>📋</Text>
@@ -361,8 +472,11 @@ export default function CustomerBookingsScreen() {
               )}
             </View>
           ) : (
-            filtered.map(b => <BookingCard key={b.id} booking={b} onCancel={id => setConfirmId(id)} />)
+            filtered.map(b => (
+              <BookingCard key={b.id} booking={b} isWide={isWide} onCancel={id => setConfirmId(id)} />
+            ))
           )}
+          </View>
         </ScrollView>
       )}
     </View>

@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Tabs } from "expo-router";
 import {
-  Home, BookOpen, Wallet, MessageCircle, User,
+  Home, BookOpen, Wallet, MessageCircle,Office, User,
 } from "@/components/ui/lucide-icon";
 
 const C = {
@@ -18,8 +18,7 @@ const C = {
 const TABS = [
   { name: "home",    label: "Home",     icon: Home          },
   { name: "booking", label: "Bookings", icon: BookOpen      },
-  { name: "wallet",  label: "Wallet",   icon: Wallet        },
-  { name: "chat",    label: "Messages", icon: MessageCircle },
+  { name: "offices",   label: "Offices",  icon: Office  },
   { name: "profile", label: "Profile",  icon: User          },
 ];
 

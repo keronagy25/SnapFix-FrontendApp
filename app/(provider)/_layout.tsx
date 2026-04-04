@@ -5,7 +5,7 @@ import {
 } from "react-native";
 import { Tabs } from "expo-router";
 import {
-  LayoutDashboard, Briefcase, Wallet, MessageCircle, User,
+  Home, Briefcase, Office, User,
 } from "@/components/ui/lucide-icon";
 
 const C = {
@@ -15,11 +15,10 @@ const C = {
 };
 
 const TABS = [
-  { name: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { name: "jobs",      label: "Jobs",      icon: Briefcase        },
-  { name: "wallet",    label: "Wallet",    icon: Wallet           },
-  { name: "chat",      label: "Messages",  icon: MessageCircle    },
-  { name: "profile",   label: "Profile",   icon: User             },
+  { name: "dashboard", label: "Home",     icon: Home       },
+  { name: "jobs",      label: "Jobs",     icon: Briefcase  },
+  { name: "offices",   label: "Offices",  icon: Office  },
+  { name: "profile",   label: "Profile",  icon: User       },
 ];
 
 /* ─── Simple static tab item — no Animated at all ─────────────── */
@@ -92,12 +91,13 @@ export default function ProviderLayout() {
       tabBar={(props) => <ProviderTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <Tabs.Screen name="dashboard" />
-      <Tabs.Screen name="jobs"      />
-      <Tabs.Screen name="wallet"    />
-      <Tabs.Screen name="chat"      />
-      <Tabs.Screen name="profile"   />
-      <Tabs.Screen name="offices"   options={{ href: null }} />
+      <Tabs.Screen name="dashboard" options={{ title: "Home" }} />
+      <Tabs.Screen name="jobs" />
+      <Tabs.Screen name="offices" />
+      <Tabs.Screen name="profile" />
+      {/* Hide any other screens from tab bar */}
+      <Tabs.Screen name="wallet" options={{ href: null }} />
+      <Tabs.Screen name="chat" options={{ href: null }} />
     </Tabs>
   );
 }

@@ -2,14 +2,14 @@ import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  Alert, RefreshControl, TextInput, Modal,
+  Alert, RefreshControl, TextInput, Modal, Linking,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, MapPin, Calendar, Clock, DollarSign,
   FileText, Tag, CheckCircle, XCircle, Play, Flag,
-  AlertCircle, RefreshCw, Star,
+  AlertCircle, RefreshCw, Star, Navigation,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore }  from "@/store/authStore";
 import { Typography }    from "@/theme/typography";
@@ -53,6 +53,66 @@ function Row({ icon: Icon, label, value, color="#3B82F6", last=false }: {
       <View style={{ flex:1 }}>
         <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#94A3B8", marginBottom:2 }}>{label}</Text>
         <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:14, color:"#0F172A", lineHeight:20 }}>{value}</Text>
+      </View>
+    </View>
+  );
+}
+
+function LocationRow({ label, address, latitude, longitude, color = "#EF4444" }: {
+  label: string; address: string; latitude?: number | string | null; longitude?: number | string | null; color?: string;
+}) {
+  // Convert string coordinates to numbers, handle null
+  const lat = latitude ? parseFloat(String(latitude)) : undefined;
+  const lon = longitude ? parseFloat(String(longitude)) : undefined;
+  const hasCoords = lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon);
+
+  const openMaps = () => {
+    if (!hasCoords || lat === undefined || lon === undefined) {
+      Alert.alert("Location", "Coordinates not available for this address.");
+      return;
+    }
+
+    let url = "";
+
+    if (Platform.OS === "web") {
+      // Web: Open Google Maps in browser
+      url = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}&zoom=16`;
+    } else if (Platform.OS === "ios") {
+      // iOS: Apple Maps
+      url = `maps:?q=${encodeURIComponent(address)}&ll=${lat},${lon}`;
+    } else {
+      // Android: Google Maps
+      url = `geo:${lat},${lon}?q=${encodeURIComponent(address)}`;
+    }
+
+    Linking.openURL(url).catch(err =>
+      Alert.alert("Error", "Unable to open maps application.")
+    );
+  };
+
+  if (!address) return null;
+
+  return (
+    <View style={{ flexDirection:"row", alignItems:"flex-start", paddingVertical:13, borderBottomWidth:1, borderBottomColor:"#F1F5F9" }}>
+      <View style={{ width:36, height:36, borderRadius:11, backgroundColor:color+"15", alignItems:"center", justifyContent:"center", marginRight:12 }}>
+        <MapPin size={16} color={color} />
+      </View>
+      <View style={{ flex:1 }}>
+        <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#94A3B8", marginBottom:2 }}>{label}</Text>
+        <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:14, color:"#0F172A", lineHeight:20, marginBottom:8 }}>{address}</Text>
+        
+        {hasCoords && lat !== undefined && lon !== undefined && (
+          <View style={{ flexDirection:"row", alignItems:"center", gap:8 }}>
+            <Text style={{ fontFamily: Typography.fonts.regular, fontSize:11, color:"#94A3B8" }}>
+              📍 {lat.toFixed(4)}, {lon.toFixed(4)}
+            </Text>
+            <TouchableOpacity onPress={openMaps}
+              style={{ flexDirection:"row", alignItems:"center", gap:4, paddingHorizontal:8, paddingVertical:4, backgroundColor:"#F0F9FF", borderRadius:8, borderWidth:1, borderColor:"#BAE6FD" }}>
+              <Navigation size={12} color="#0284C7" />
+              <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:11, color:"#0284C7" }}>Open Maps</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -248,8 +308,18 @@ export default function ProviderJobDetailScreen() {
 
           <SectionLabel label="LOCATION & SCHEDULE" />
           <Card>
-            <Row icon={MapPin}   label="Region"  value={job.region?.name ?? ""}        color="#EF4444" />
-            <Row icon={MapPin}   label="Address" value={job.address}                   color="#EF4444" />
+            <LocationRow 
+              label="Region" 
+              address={job.region?.name ?? ""} 
+              color="#EF4444" 
+            />
+            <LocationRow 
+              label="Address" 
+              address={job.address}
+              latitude={job.latitude}
+              longitude={job.longitude}
+              color="#EF4444"
+            />
             <Row icon={Calendar} label="Date"    value={job.preferred_date}            color="#3B82F6" />
             <Row icon={Clock}    label="Time"    value={job.preferred_time?.slice(0,5) ?? ""} color="#3B82F6" last />
           </Card>

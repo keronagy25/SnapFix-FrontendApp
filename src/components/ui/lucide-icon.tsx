@@ -69,7 +69,7 @@ const iconMap: Record<string, any> = {
   
   // Money
   DollarSign: (props: any) => <Feather name="dollar-sign" {...props} />,
-  Wallet: (props: any) => <Feather name="wallet" {...props} />,
+  Wallet: (props: any) => <Feather name="dollar-sign" {...props} />,
   Gift: (props: any) => <Feather name="gift" {...props} />,
   
   // Status
@@ -139,6 +139,10 @@ const iconMap: Record<string, any> = {
   Crosshair: (props: any) => <Feather name="crosshair" {...props} />,
   // Add this with other status/activity icons
 Activity: (props: any) => <Feather name="activity" {...props} />,
+
+// Add to iconMap
+Office: (props: any) => <MaterialIcons name="business" {...props} />,
+Map: (props: any) => <MaterialIcons name="map" {...props} />,
 };
 
 // Export all icons
@@ -233,3 +237,5 @@ export const VolumeX = (props: any) => iconMap.VolumeX(props);
 export const Pause = (props: any) => iconMap.Pause(props);
 export const Crosshair = (props: any) => iconMap.Crosshair(props);
 export const Activity = (props: any) => iconMap.Activity(props);
+export const Office = (props: any) => iconMap.Office(props);
+export const Map = (props: any) => iconMap.Maps(props);
