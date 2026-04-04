@@ -14,8 +14,7 @@ import * as Location from 'expo-location';
 import {
   ArrowLeft, ChevronDown, CheckCircle, Zap,
   Calendar, Clock, ChevronLeft, ChevronRight, AlertCircle,
-  MapPin, Navigation, Crosshair, Search,
-  Sun, Moon,
+  MapPin, Navigation, Crosshair,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore } from "@/store/authStore";
 import { Typography } from "@/theme/typography";
@@ -107,7 +106,7 @@ function SelectPill({ selected, onPress, placeholder, hasError }: {
   );
 }
 
-// Enhanced Location Picker Modal with Web Support
+// Location Picker Modal
 function LocationPickerModal({ 
   visible, 
   onSelect, 
@@ -140,12 +139,9 @@ function LocationPickerModal({
   const reverseGeocode = async (lat: number, lng: number) => {
     setLoadingAddress(true);
     try {
-      // Using Nominatim (OpenStreetMap) - completely free, no API key needed
       const response = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
-        { 
-          headers: { 'User-Agent': 'BookingApp/1.0' }
-        }
+        { headers: { 'User-Agent': 'BookingApp/1.0' } }
       );
       const data = await response.json();
       if (data && data.display_name) {
@@ -154,7 +150,6 @@ function LocationPickerModal({
       }
     } catch (error) {
       console.log("Reverse geocoding error:", error);
-      // Fallback to coordinates
       setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     } finally {
       setLoadingAddress(false);
@@ -167,7 +162,7 @@ function LocationPickerModal({
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert("Permission Denied", "Location permission is required to detect your current location.");
+        Alert.alert("Permission Denied", "Location permission is required.");
         return;
       }
       
@@ -180,15 +175,9 @@ function LocationPickerModal({
       
       if (mapInstanceRef.current) {
         mapInstanceRef.current.setView([latitude, longitude], 15);
-        scheduleLeafletInvalidate(mapInstanceRef.current);
       } else {
         mapViewRef.current?.animateToRegion(
-          {
-            latitude,
-            longitude,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          },
+          { latitude, longitude, latitudeDelta: 0.02, longitudeDelta: 0.02 },
           350
         );
       }
@@ -226,9 +215,7 @@ function LocationPickerModal({
     if (mapInstanceRef.current) {
       try {
         mapInstanceRef.current.remove();
-      } catch {
-        /* map node may already be gone */
-      }
+      } catch {}
       mapInstanceRef.current = null;
       markerRef.current = null;
     }
@@ -238,9 +225,7 @@ function LocationPickerModal({
     const run = () => {
       try {
         map.invalidateSize({ animate: false });
-      } catch {
-        /* noop */
-      }
+      } catch {}
     };
     requestAnimationFrame(() => {
       requestAnimationFrame(run);
@@ -328,7 +313,6 @@ function LocationPickerModal({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: "#fff" }}>
-        {/* Header */}
         <LinearGradient colors={["#1E3A8A", "#1E40AF"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           style={{ paddingTop: Platform.OS === "ios" ? 50 : 40, paddingBottom: 16, paddingHorizontal: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -340,17 +324,12 @@ function LocationPickerModal({
           </View>
         </LinearGradient>
 
-        {/* Map Container */}
         <View style={{ flex: 1, backgroundColor: "#f0f0f0" }}>
           {Platform.OS === "web" ? (
             <View
               ref={mapContainerRef}
               onLayout={onWebMapContainerLayout}
-              style={{
-                flex: 1,
-                width: "100%",
-                minHeight: Math.max(320, height * 0.45),
-              }}
+              style={{ flex: 1, width: "100%", minHeight: Math.max(320, height * 0.45) }}
             />
           ) : (
             <LocationPickerMapNative
@@ -366,7 +345,6 @@ function LocationPickerModal({
             />
           )}
 
-          {/* Controls Overlay */}
           <View style={{ position: "absolute", bottom: 20, right: 20, gap: 10 }}>
             <TouchableOpacity
               onPress={detectCurrentLocation}
@@ -376,7 +354,6 @@ function LocationPickerModal({
             </TouchableOpacity>
           </View>
 
-          {/* Address Card */}
           <View style={{ position: "absolute", bottom: 20, left: 20, right: 80, backgroundColor: "#fff", borderRadius: 16, padding: 16, shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4, elevation: 5 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
               <MapPin size={18} color="#1E3A8A" />
@@ -397,7 +374,6 @@ function LocationPickerModal({
           </View>
         </View>
 
-        {/* Footer */}
         <View style={{ padding: 20, borderTopWidth: 1, borderTopColor: "#E2E8F0" }}>
           <TouchableOpacity
             onPress={handleConfirm}
@@ -464,7 +440,7 @@ function RegionPickerModal({ visible, items, onSelect, onClose }: {
   );
 }
 
-// Calendar Picker (same as before)
+// Calendar Picker
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -568,7 +544,7 @@ function CalendarPicker({ visible, value, onSelect, onClose }: {
   );
 }
 
-// Time Picker (same as before)
+// Time Picker
 function TimePicker({ visible, value, onSelect, onClose }: {
   visible: boolean; value: string; onSelect: (t: string) => void; onClose: () => void;
 }) {
@@ -765,12 +741,13 @@ export default function BookingCreateScreen() {
         estimated_price: form.estimated_price.trim() || undefined,
       };
       
-      console.log("Submitting payload:", payload);
-      await createBooking(payload, token);
+      console.log("Submitting payload:", JSON.stringify(payload, null, 2));
+      const response = await createBooking(payload, token);
+      console.log("Response:", response);
       setSuccess(true);
     } catch (err: any) {
       const d = err?.data ?? {};
-      console.log("[BookingCreate] error:", JSON.stringify(d));
+      console.log("[BookingCreate] error:", JSON.stringify(d, null, 2));
       
       const fieldMap: Record<string, string> = {
         category: "category", region: "region", address: "address",
@@ -778,6 +755,7 @@ export default function BookingCreateScreen() {
         preferred_date: "preferred_date", preferred_time: "preferred_time",
         floor_number: "floor_number", apartment_number: "apartment_number",
         latitude: "latitude", longitude: "longitude",
+        special_mark: "special_mark",
       };
       
       const inline: Record<string, string> = {};
@@ -910,34 +888,84 @@ export default function BookingCreateScreen() {
                 placeholder="Describe the issue in detail…" multiline numberOfLines={3}
                 style={[errors.description ? errInput : baseInput, { height: 90, paddingTop: 12, textAlignVertical: "top" }]} />
             </Field>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Zap size={16} color={form.is_urgent ? "#EF4444" : "#94A3B8"} />
+                <View>
+                  <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 14, color: form.is_urgent ? "#EF4444" : "#64748B" }}>Mark as Urgent</Text>
+                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#94A3B8" }}>Provider arrives within 30 min</Text>
+                </View>
+              </View>
+              <Switch value={form.is_urgent} onValueChange={v => set("is_urgent", v)}
+                trackColor={{ false: "#E2E8F0", true: "#FECACA" }} thumbColor={form.is_urgent ? "#EF4444" : "#94A3B8"} />
+            </View>
           </View>
         </View>
 
-        {/* LOCATION */}
+        {/* LOCATION DETAILS with Floor, Apartment, and Special Mark */}
         <View>
           <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
-            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 15, color: "#0F172A", marginBottom: 14 }}>📍 Location</Text>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 15, color: "#0F172A", marginBottom: 14 }}>📍 Location Details</Text>
             
             <Field label="Region" required error={errors.region}>
               <SelectPill selected={form.region_name} onPress={() => setRegPicker(true)} placeholder="Select your region" hasError={!!errors.region} />
             </Field>
             
-            <Field label="Address" required error={errors.address}>
+            <Field label="Street Address" required error={errors.address}>
               <TouchableOpacity 
                 onPress={() => setLocationPicker(true)}
                 style={[errors.address ? errInput : baseInput, { flexDirection: "row", alignItems: "center", gap: 10 }]}>
                 <MapPin size={17} color={form.address ? "#1E3A8A" : "#94A3B8"} />
                 <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 13, color: form.address ? "#0F172A" : "#94A3B8", flex: 1 }} numberOfLines={2}>
-                  {form.address || "Tap to select location"}
+                  {form.address || "Tap to select location on map"}
                 </Text>
                 <Navigation size={16} color="#1E3A8A" />
               </TouchableOpacity>
             </Field>
             
+            {/* Floor and Apartment Number - Side by Side */}
+            <View style={{ flexDirection: "row", gap: 12, marginBottom: 14 }}>
+              <View style={{ flex: 1 }}>
+                <Field label="Floor Number">
+                  <TextInput
+                    value={form.floor_number}
+                    onChangeText={v => set("floor_number", v)}
+                    placeholder="e.g., 3"
+                    keyboardType="numeric"
+                    style={baseInput}
+                  />
+                </Field>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Field label="Apartment Number">
+                  <TextInput
+                    value={form.apartment_number}
+                    onChangeText={v => set("apartment_number", v)}
+                    placeholder="e.g., 12"
+                    keyboardType="numeric"
+                    style={baseInput}
+                  />
+                </Field>
+              </View>
+            </View>
+            
+            {/* Special Mark */}
+            <Field label="Special Mark (Optional)">
+              <TextInput
+                value={form.special_mark}
+                onChangeText={v => set("special_mark", v)}
+                placeholder="e.g., Blue door on the left, Near the elevator…"
+                multiline
+                numberOfLines={3}
+                style={[baseInput, { height: 80, paddingTop: 12, textAlignVertical: "top" }]}
+              />
+            </Field>
+            
+            {/* Coordinates Display */}
             {(form.latitude && form.longitude) && (
               <View style={{ marginTop: 8, padding: 10, backgroundColor: "#F0F9FF", borderRadius: 12 }}>
                 <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#0369A1" }}>
-                  📍 {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
+                  📍 Coordinates: {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
                 </Text>
               </View>
             )}
@@ -974,10 +1002,36 @@ export default function BookingCreateScreen() {
                 </Field>
               </View>
             </View>
+
+            <Field label="Estimated Price (EGP)">
+              <TextInput value={form.estimated_price} onChangeText={v => set("estimated_price", v)}
+                placeholder="Optional — leave blank if unsure" keyboardType="decimal-pad" style={baseInput} />
+            </Field>
           </View>
         </View>
 
-        {/* SUBMIT */}
+        {/* BOOKING SUMMARY */}
+        {(form.category_name || form.region_name || form.title || form.floor_number || form.apartment_number || form.special_mark) && (
+          <View>
+            <View style={{ backgroundColor: "#EFF6FF", borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#BFDBFE" }}>
+              <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 12, color: "#1D4ED8", marginBottom: 10, letterSpacing: 0.5 }}>📋 BOOKING SUMMARY</Text>
+              {form.category_name && <SRow label="Service" value={form.category_name} />}
+              {form.title && <SRow label="Issue" value={form.title} />}
+              {form.region_name && <SRow label="Region" value={form.region_name} />}
+              {form.address && <SRow label="Address" value={form.address.length > 40 ? form.address.substring(0, 40) + "..." : form.address} />}
+              {(form.floor_number || form.apartment_number) && (
+                <SRow label="Unit" value={`Floor ${form.floor_number || '?'}, Apt ${form.apartment_number || '?'}`} />
+              )}
+              {form.special_mark && <SRow label="Special Mark" value={form.special_mark.length > 30 ? form.special_mark.substring(0, 30) + "..." : form.special_mark} />}
+              {form.preferred_date && <SRow label="Date" value={displayDate(form.preferred_date)} />}
+              {form.preferred_time && <SRow label="Time" value={displayTime(form.preferred_time)} />}
+              {form.is_urgent && <SRow label="Urgency" value="🚨 Urgent" />}
+              {form.estimated_price && <SRow label="Est. Price" value={`${form.estimated_price} EGP`} />}
+            </View>
+          </View>
+        )}
+
+        {/* SUBMIT BUTTON */}
         <View>
           <TouchableOpacity onPress={handleSubmit} disabled={submitting} activeOpacity={0.88}
             style={{ borderRadius: 18, overflow: "hidden", opacity: submitting ? 0.75 : 1 }}>
