@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, ActivityIndicator, Linking,
 } from "react-native";
-import { MapPin, Clock, Navigation, Building2 } from "lucide-react-native";
+import { MapPin, Clock, Navigation, Building2 } from "@/components/ui/lucide-icon";
 import { Typography } from "@/theme/typography";
 import { getOffices, type Office } from "@/services/coreService";
 

@@ -134,6 +134,11 @@ const iconMap: Record<string, any> = {
   BellOff: (props: any) => <Feather name="bell-off" {...props} />,
   Volume2: (props: any) => <Feather name="volume-2" {...props} />,
   VolumeX: (props: any) => <Feather name="volume-x" {...props} />,
+
+  // Add this with the other location/business icons
+  Crosshair: (props: any) => <Feather name="crosshair" {...props} />,
+  // Add this with other status/activity icons
+Activity: (props: any) => <Feather name="activity" {...props} />,
 };
 
 // Export all icons
@@ -226,3 +231,5 @@ export const BellOff = (props: any) => iconMap.BellOff(props);
 export const Volume2 = (props: any) => iconMap.Volume2(props);
 export const VolumeX = (props: any) => iconMap.VolumeX(props);
 export const Pause = (props: any) => iconMap.Pause(props);
+export const Crosshair = (props: any) => iconMap.Crosshair(props);
+export const Activity = (props: any) => iconMap.Activity(props);

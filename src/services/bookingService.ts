@@ -80,8 +80,11 @@ export interface CreateBookingPayload {
   description:     string;
   preferred_date:  string;
   preferred_time:  string;
-  latitude?:       string;
-  longitude?:      string;
+  floor_number?:   string;
+  apartment_number?: string;
+  special_mark?:   string;
+  latitude?:       number;
+  longitude?:      number;
   is_urgent?:      boolean;
   estimated_price?: string;
 }

@@ -16,7 +16,14 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.snapfix.app"
+      "bundleIdentifier": "com.snapfix.app",
+      "config": {
+        "googleMapsApiKey": "AIzaSyBFj1U8JmcsYrcOTSt7YB-cIzHx4aWlmD8"
+      },
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "SnapFix needs your location to find nearby service providers and show your current position on the map.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "SnapFix needs your location to find nearby service providers and show your current position on the map."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -24,8 +31,15 @@
       },
       "package": "com.snapfix.app",
       "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyBFj1U8JmcsYrcOTSt7YB-cIzHx4aWlmD8"
+        }
+      }
     },
     "plugins": [
       "expo-router",
@@ -35,6 +49,12 @@
         {
           "photosPermission": "SnapFix needs access to upload documents.",
           "cameraPermission": "SnapFix needs camera access."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "SnapFix needs your location to find nearby service providers."
         }
       ]
     ],

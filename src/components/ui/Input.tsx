@@ -7,7 +7,7 @@ import {
   type TextInputProps,
   Animated,
 } from "react-native";
-import { Eye, EyeOff, AlertCircle } from "lucide-react-native";
+import { Eye, EyeOff, AlertCircle } from "@/components/ui/lucide-icon";
 import { Colors }     from "@/theme/colors";
 import { Typography } from "@/theme/typography";
 import { Shadows }    from "@/theme/shadows";

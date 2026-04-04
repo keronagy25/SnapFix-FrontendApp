@@ -9,7 +9,7 @@
  */
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Text, View, TouchableOpacity, Platform, Dimensions } from "react-native";
-import { CheckCircle, XCircle, AlertTriangle, Info, X } from "lucide-react-native";
+import { CheckCircle, XCircle, AlertTriangle, Info, X } from "@/components/ui/lucide-icon";
 
 export type ToastType = "success" | "error" | "warning" | "info";
 

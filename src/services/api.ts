@@ -43,10 +43,12 @@ export async function apiRequest<T>(
   token?:   string | null,
 ): Promise<T> {
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Accept":       "application/json",
+    "Accept": "application/json",
     ...(options.headers as Record<string, string> ?? {}),
   };
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
     headers["Authorization"] = `Token ${token}`;
