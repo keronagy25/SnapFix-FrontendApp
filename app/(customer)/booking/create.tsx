@@ -4,10 +4,12 @@ import {
   StatusBar, Platform, ActivityIndicator,
   TextInput, Switch, Modal, Dimensions,
   KeyboardAvoidingView, Alert,
+  type LayoutChangeEvent,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import { LocationPickerMapNative } from "./location-picker-map";
+import type { LocationPickerMapNativeRef } from "./location-picker-map/types";
 import { LinearGradient } from "expo-linear-gradient";
-import MapView, { Marker, PROVIDER_GOOGLE, Region as MapRegion } from 'react-native-maps';
 import * as Location from 'expo-location';
 import {
   ArrowLeft, ChevronDown, CheckCircle, Zap,
@@ -105,7 +107,7 @@ function SelectPill({ selected, onPress, placeholder, hasError }: {
   );
 }
 
-// Location Picker Modal with Maps (Fixed for light mode)
+// Enhanced Location Picker Modal with Web Support
 function LocationPickerModal({ 
   visible, 
   onSelect, 
@@ -119,34 +121,41 @@ function LocationPickerModal({
   initialLat?: number | null;
   initialLng?: number | null;
 }) {
-  const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(
-    initialLat && initialLng ? { lat: initialLat, lng: initialLng } : null
-  );
+  const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number }>(() => {
+    const lat = initialLat ?? 30.0444;
+    const lng = initialLng ?? 31.2357;
+    return { lat, lng };
+  });
   const [address, setAddress] = useState<string>("");
   const [loadingAddress, setLoadingAddress] = useState(false);
   const [detectingLocation, setDetectingLocation] = useState(false);
-  const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid' | 'terrain'>('standard');
-  const mapRef = useRef<MapView>(null);
-  
-  const initialRegion: MapRegion = {
-    latitude: initialLat || 30.0444,
-    longitude: initialLng || 31.2357,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  };
+  const mapContainerRef = useRef<View>(null);
+  const mapInstanceRef = useRef<any>(null);
+  const markerRef = useRef<any>(null);
+  const mapViewRef = useRef<LocationPickerMapNativeRef | null>(null);
+
+  const initialLat_val = initialLat || 30.0444;
+  const initialLng_val = initialLng || 31.2357;
 
   const reverseGeocode = async (lat: number, lng: number) => {
     setLoadingAddress(true);
     try {
-      const results = await Location.reverseGeocodeAsync({ latitude: lat, longitude: lng });
-      if (results.length > 0) {
-        const addr = results[0];
-        const formattedAddress = `${addr.street || ''} ${addr.streetNumber || ''}, ${addr.district || ''}, ${addr.city || ''}, ${addr.region || ''}`.trim();
-        setAddress(formattedAddress);
-        return formattedAddress;
+      // Using Nominatim (OpenStreetMap) - completely free, no API key needed
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
+        { 
+          headers: { 'User-Agent': 'BookingApp/1.0' }
+        }
+      );
+      const data = await response.json();
+      if (data && data.display_name) {
+        setAddress(data.display_name);
+        return data.display_name;
       }
     } catch (error) {
       console.log("Reverse geocoding error:", error);
+      // Fallback to coordinates
+      setAddress(`${lat.toFixed(6)}, ${lng.toFixed(6)}`);
     } finally {
       setLoadingAddress(false);
     }
@@ -169,12 +178,20 @@ function LocationPickerModal({
       const { latitude, longitude } = roundCoordinates(location.coords.latitude, location.coords.longitude);
       setSelectedLocation({ lat: latitude, lng: longitude });
       
-      mapRef.current?.animateToRegion({
-        latitude,
-        longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }, 1000);
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.setView([latitude, longitude], 15);
+        scheduleLeafletInvalidate(mapInstanceRef.current);
+      } else {
+        mapViewRef.current?.animateToRegion(
+          {
+            latitude,
+            longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          },
+          350
+        );
+      }
       
       await reverseGeocode(latitude, longitude);
     } catch (error) {
@@ -185,15 +202,6 @@ function LocationPickerModal({
     }
   };
 
-  const handleMapPress = async (event: any) => {
-    let { latitude, longitude } = event.nativeEvent.coordinate;
-    const rounded = roundCoordinates(latitude, longitude);
-    latitude = rounded.latitude;
-    longitude = rounded.longitude;
-    setSelectedLocation({ lat: latitude, lng: longitude });
-    await reverseGeocode(latitude, longitude);
-  };
-
   const handleConfirm = () => {
     if (selectedLocation && address) {
       onSelect(selectedLocation.lat, selectedLocation.lng, address);
@@ -202,6 +210,118 @@ function LocationPickerModal({
       Alert.alert("Error", "Please select a location on the map first.");
     }
   };
+
+  useEffect(() => {
+    if (!visible) return;
+    const lat = initialLat ?? 30.0444;
+    const lng = initialLng ?? 31.2357;
+    const rounded = roundCoordinates(lat, lng);
+    setSelectedLocation({ lat: rounded.latitude, lng: rounded.longitude });
+    void reverseGeocode(rounded.latitude, rounded.longitude);
+  }, [visible, initialLat, initialLng]);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    if (visible) return;
+    if (mapInstanceRef.current) {
+      try {
+        mapInstanceRef.current.remove();
+      } catch {
+        /* map node may already be gone */
+      }
+      mapInstanceRef.current = null;
+      markerRef.current = null;
+    }
+  }, [visible]);
+
+  const scheduleLeafletInvalidate = (map: any) => {
+    const run = () => {
+      try {
+        map.invalidateSize({ animate: false });
+      } catch {
+        /* noop */
+      }
+    };
+    requestAnimationFrame(() => {
+      requestAnimationFrame(run);
+    });
+    setTimeout(run, 100);
+    setTimeout(run, 400);
+  };
+
+  const ensureLeafletCss = () => {
+    if (typeof document === "undefined") return;
+    const id = "snapfix-leaflet-css";
+    if (document.getElementById(id)) return;
+    const link = document.createElement("link");
+    link.id = id;
+    link.rel = "stylesheet";
+    link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+    document.head.appendChild(link);
+  };
+
+  const initializeMap = async () => {
+    if (typeof window === "undefined" || Platform.OS !== "web") return;
+
+    try {
+      ensureLeafletCss();
+      const L = await import("leaflet");
+      const container = mapContainerRef.current;
+      if (!container || mapInstanceRef.current) return;
+
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+
+      const map = L.map(container as any, { zoomControl: true, attributionControl: true }).setView(
+        [initialLat_val, initialLng_val],
+        13
+      );
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+        maxZoom: 19,
+      }).addTo(map);
+
+      const marker = L.marker([initialLat_val, initialLng_val], { draggable: true }).addTo(map);
+      markerRef.current = marker;
+
+      map.on("click", async (e: any) => {
+        const { lat, lng } = e.latlng;
+        const rounded = roundCoordinates(lat, lng);
+        setSelectedLocation({ lat: rounded.latitude, lng: rounded.longitude });
+        marker.setLatLng([rounded.latitude, rounded.longitude]);
+        await reverseGeocode(rounded.latitude, rounded.longitude);
+      });
+
+      marker.on("dragend", async () => {
+        const latLng = marker.getLatLng();
+        const rounded = roundCoordinates(latLng.lat, latLng.lng);
+        setSelectedLocation({ lat: rounded.latitude, lng: rounded.longitude });
+        await reverseGeocode(rounded.latitude, rounded.longitude);
+      });
+
+      mapInstanceRef.current = map;
+      scheduleLeafletInvalidate(map);
+    } catch (error) {
+      console.log("Map initialization error:", error);
+    }
+  };
+
+  const onWebMapContainerLayout = (e: LayoutChangeEvent) => {
+    if (Platform.OS !== "web" || !visible) return;
+    const { width, height: h } = e.nativeEvent.layout;
+    if (width < 64 || h < 64) return;
+    void initializeMap();
+  };
+
+  useEffect(() => {
+    if (!visible || Platform.OS !== "web" || !markerRef.current) return;
+    markerRef.current.setLatLng([selectedLocation.lat, selectedLocation.lng]);
+  }, [visible, selectedLocation.lat, selectedLocation.lng]);
 
   if (!visible) return null;
 
@@ -216,42 +336,37 @@ function LocationPickerModal({
               <ArrowLeft size={20} color="#fff" />
             </TouchableOpacity>
             <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 18, color: "#fff" }}>Select Location</Text>
-            <TouchableOpacity 
-              onPress={() => setMapType(mapType === 'standard' ? 'satellite' : 'standard')}
-              style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.12)", alignItems: "center", justifyContent: "center" }}>
-              {mapType === 'standard' ? <Sun size={20} color="#fff" /> : <Moon size={20} color="#fff" />}
-            </TouchableOpacity>
+            <View style={{ width: 40 }} />
           </View>
         </LinearGradient>
 
-        {/* Map - Fixed for light mode */}
-        <View style={{ flex: 1 }}>
-          <MapView
-            ref={mapRef}
-            provider={PROVIDER_GOOGLE}
-            style={{ flex: 1 }}
-            initialRegion={initialRegion}
-            onPress={handleMapPress}
-            showsUserLocation
-            showsMyLocationButton={false}
-            mapType={mapType}
-            customMapStyle={[]} // Empty array for default light style
-          >
-            {selectedLocation && (
-              <Marker
-                coordinate={{ latitude: selectedLocation.lat, longitude: selectedLocation.lng }}
-                draggable
-                onDragEnd={async (e) => {
-                  let { latitude, longitude } = e.nativeEvent.coordinate;
-                  const rounded = roundCoordinates(latitude, longitude);
-                  setSelectedLocation({ lat: rounded.latitude, lng: rounded.longitude });
-                  await reverseGeocode(rounded.latitude, rounded.longitude);
-                }}
-              />
-            )}
-          </MapView>
+        {/* Map Container */}
+        <View style={{ flex: 1, backgroundColor: "#f0f0f0" }}>
+          {Platform.OS === "web" ? (
+            <View
+              ref={mapContainerRef}
+              onLayout={onWebMapContainerLayout}
+              style={{
+                flex: 1,
+                width: "100%",
+                minHeight: Math.max(320, height * 0.45),
+              }}
+            />
+          ) : (
+            <LocationPickerMapNative
+              ref={mapViewRef}
+              initialLat={initialLat}
+              initialLng={initialLng}
+              lat={selectedLocation.lat}
+              lng={selectedLocation.lng}
+              onCoordinateChange={async (la: number, ln: number) => {
+                setSelectedLocation({ lat: la, lng: ln });
+                await reverseGeocode(la, ln);
+              }}
+            />
+          )}
 
-          {/* Controls */}
+          {/* Controls Overlay */}
           <View style={{ position: "absolute", bottom: 20, right: 20, gap: 10 }}>
             <TouchableOpacity
               onPress={detectCurrentLocation}
@@ -610,7 +725,6 @@ export default function BookingCreateScreen() {
   };
 
   const handleLocationSelect = (lat: number, lng: number, address: string) => {
-    // Round coordinates to 6 decimal places before saving
     const rounded = roundCoordinates(lat, lng);
     set("latitude", rounded.latitude);
     set("longitude", rounded.longitude);
@@ -631,7 +745,6 @@ export default function BookingCreateScreen() {
     setApiError(null);
     
     try {
-      // Ensure coordinates are rounded to 6 decimal places
       const latitude = form.latitude ? parseFloat(form.latitude.toFixed(6)) : undefined;
       const longitude = form.longitude ? parseFloat(form.longitude.toFixed(6)) : undefined;
       
@@ -652,7 +765,7 @@ export default function BookingCreateScreen() {
         estimated_price: form.estimated_price.trim() || undefined,
       };
       
-      console.log("Submitting payload:", payload); // Debug log
+      console.log("Submitting payload:", payload);
       await createBooking(payload, token);
       setSuccess(true);
     } catch (err: any) {
@@ -774,7 +887,6 @@ export default function BookingCreateScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* API error banner */}
         {apiError && (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#FEF2F2", borderRadius: 14, padding: 14, marginBottom: 4, marginTop: 4, borderWidth: 1, borderColor: "#FECACA" }}>
             <AlertCircle size={16} color="#EF4444" />
@@ -798,17 +910,6 @@ export default function BookingCreateScreen() {
                 placeholder="Describe the issue in detail…" multiline numberOfLines={3}
                 style={[errors.description ? errInput : baseInput, { height: 90, paddingTop: 12, textAlignVertical: "top" }]} />
             </Field>
-            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 10, borderTopWidth: 1, borderTopColor: "#F1F5F9", marginTop: 4 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Zap size={16} color={form.is_urgent ? "#EF4444" : "#94A3B8"} />
-                <View>
-                  <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 14, color: form.is_urgent ? "#EF4444" : "#64748B" }}>Mark as Urgent</Text>
-                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#94A3B8" }}>Provider arrives within 30 min</Text>
-                </View>
-              </View>
-              <Switch value={form.is_urgent} onValueChange={v => set("is_urgent", v)}
-                trackColor={{ false: "#E2E8F0", true: "#FECACA" }} thumbColor={form.is_urgent ? "#EF4444" : "#94A3B8"} />
-            </View>
           </View>
         </View>
 
@@ -827,52 +928,16 @@ export default function BookingCreateScreen() {
                 style={[errors.address ? errInput : baseInput, { flexDirection: "row", alignItems: "center", gap: 10 }]}>
                 <MapPin size={17} color={form.address ? "#1E3A8A" : "#94A3B8"} />
                 <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 13, color: form.address ? "#0F172A" : "#94A3B8", flex: 1 }} numberOfLines={2}>
-                  {form.address || "Tap to select location on map"}
+                  {form.address || "Tap to select location"}
                 </Text>
                 <Navigation size={16} color="#1E3A8A" />
               </TouchableOpacity>
             </Field>
             
-            {/* Floor and Apartment Number */}
-            <View style={{ flexDirection: "row", gap: 12, marginBottom: 14 }}>
-              <View style={{ flex: 1 }}>
-                <Field label="Floor Number">
-                  <TextInput
-                    value={form.floor_number}
-                    onChangeText={v => set("floor_number", v)}
-                    placeholder="Floor"
-                    keyboardType="numeric"
-                    style={baseInput} />
-                </Field>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field label="Apartment Number">
-                  <TextInput
-                    value={form.apartment_number}
-                    onChangeText={v => set("apartment_number", v)}
-                    placeholder="Apartment"
-                    keyboardType="numeric"
-                    style={baseInput} />
-                </Field>
-              </View>
-            </View>
-            
-            {/* Special Mark */}
-            <Field label="Special Mark (Optional)">
-              <TextInput
-                value={form.special_mark}
-                onChangeText={v => set("special_mark", v)}
-                placeholder="e.g., Blue door on the left, Near the elevator…"
-                multiline
-                numberOfLines={2}
-                style={[baseInput, { height: 70, paddingTop: 12, textAlignVertical: "top" }]} />
-            </Field>
-            
-            {/* Coordinates Display (if available) */}
             {(form.latitude && form.longitude) && (
               <View style={{ marginTop: 8, padding: 10, backgroundColor: "#F0F9FF", borderRadius: 12 }}>
                 <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#0369A1" }}>
-                  📍 Coordinates: {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
+                  📍 {form.latitude.toFixed(6)}, {form.longitude.toFixed(6)}
                 </Text>
               </View>
             )}
@@ -909,33 +974,8 @@ export default function BookingCreateScreen() {
                 </Field>
               </View>
             </View>
-
-            <Field label="Estimated Price (EGP)">
-              <TextInput value={form.estimated_price} onChangeText={v => set("estimated_price", v)}
-                placeholder="Optional — leave blank if unsure" keyboardType="decimal-pad" style={baseInput} />
-            </Field>
           </View>
         </View>
-
-        {/* SUMMARY */}
-        {(form.category_name || form.region_name || form.title) && (
-          <View>
-            <View style={{ backgroundColor: "#EFF6FF", borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#BFDBFE" }}>
-              <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 12, color: "#1D4ED8", marginBottom: 10, letterSpacing: 0.5 }}>📋 BOOKING SUMMARY</Text>
-              {form.category_name && <SRow label="Service" value={form.category_name} />}
-              {form.title && <SRow label="Issue" value={form.title} />}
-              {form.region_name && <SRow label="Region" value={form.region_name} />}
-              {form.address && <SRow label="Address" value={form.address.length > 40 ? form.address.substring(0, 40) + "..." : form.address} />}
-              {(form.floor_number || form.apartment_number) && (
-                <SRow label="Unit" value={`Floor ${form.floor_number || '?'}, Apt ${form.apartment_number || '?'}`} />
-              )}
-              {form.special_mark && <SRow label="Special Mark" value={form.special_mark.length > 30 ? form.special_mark.substring(0, 30) + "..." : form.special_mark} />}
-              {form.preferred_date && <SRow label="Date" value={displayDate(form.preferred_date)} />}
-              {form.preferred_time && <SRow label="Time" value={displayTime(form.preferred_time)} />}
-              {form.is_urgent && <SRow label="Urgency" value="🚨 Urgent" />}
-            </View>
-          </View>
-        )}
 
         {/* SUBMIT */}
         <View>
