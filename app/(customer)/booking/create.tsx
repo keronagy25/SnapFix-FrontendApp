@@ -324,7 +324,7 @@ function LocationPickerModal({
           </View>
         </LinearGradient>
 
-        <View style={{ flex: 1, minHeight: 0, backgroundColor: "#f0f0f0" }}>
+        <View style={{ flex: 1, minHeight: 0, backgroundColor: "#CBD5E1" }}>
           {Platform.OS === "web" ? (
             <View
               ref={mapContainerRef}
@@ -334,6 +334,7 @@ function LocationPickerModal({
                 flex: 1,
                 width: "100%",
                 minHeight: Math.max(320, layoutHeight * 0.45),
+                backgroundColor: "#CBD5E1",
               }}
             />
           ) : (
