@@ -1,5 +1,5 @@
 import React, { forwardRef, useImperativeHandle, useRef } from "react";
-import { Platform } from "react-native";
+import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import type { LocationPickerMapNativeProps, LocationPickerMapNativeRef } from "./types";
 
@@ -13,6 +13,9 @@ function roundCoordinates(lat: number, lng: number) {
 export const LocationPickerMapNative = forwardRef<LocationPickerMapNativeRef, LocationPickerMapNativeProps>(
   function LocationPickerMapNative({ initialLat, initialLng, lat, lng, onCoordinateChange }, outerRef) {
     const mapRef = useRef<MapView>(null);
+    const { height: winH } = useWindowDimensions();
+    // MapView inside Modal often gets 0 height with flex-only layout on iOS/Android.
+    const mapHeight = Math.max(320, Math.round(winH * 0.52));
 
     useImperativeHandle(outerRef, () => ({
       animateToRegion: (region, duration = 350) => {
@@ -21,10 +24,11 @@ export const LocationPickerMapNative = forwardRef<LocationPickerMapNativeRef, Lo
     }));
 
     return (
+      <View style={{ width: "100%", height: mapHeight }} collapsable={false}>
       <MapView
         key={`loc-${initialLat ?? 0}-${initialLng ?? 0}`}
         ref={mapRef}
-        style={{ flex: 1, width: "100%", minHeight: 320 }}
+        style={StyleSheet.absoluteFillObject}
         provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
         initialRegion={{
           latitude: lat,
@@ -51,6 +55,7 @@ export const LocationPickerMapNative = forwardRef<LocationPickerMapNativeRef, Lo
           }}
         />
       </MapView>
+      </View>
     );
   }
 );

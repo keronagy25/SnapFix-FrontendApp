@@ -2,8 +2,9 @@ import React, { useEffect, useState, useRef } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  TextInput, Switch, Modal, Dimensions,
+  TextInput, Switch, Modal,
   KeyboardAvoidingView, Alert,
+  useWindowDimensions,
   type LayoutChangeEvent,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -20,8 +21,6 @@ import { useAuthStore } from "@/store/authStore";
 import { Typography } from "@/theme/typography";
 import { getCategories, getRegions, type Category, type Region } from "@/services/coreService";
 import { createBooking, type CreateBookingPayload } from "@/services/bookingService";
-
-const { width, height } = Dimensions.get('window');
 
 // Helper function to round coordinates to 6 decimal places
 const roundCoordinates = (lat: number, lng: number) => {
@@ -132,6 +131,7 @@ function LocationPickerModal({
   const mapInstanceRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const mapViewRef = useRef<LocationPickerMapNativeRef | null>(null);
+  const { height: layoutHeight } = useWindowDimensions();
 
   const initialLat_val = initialLat || 30.0444;
   const initialLng_val = initialLng || 31.2357;
@@ -312,7 +312,7 @@ function LocationPickerModal({
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
-      <View style={{ flex: 1, backgroundColor: "#fff" }}>
+      <View style={{ flex: 1, minHeight: 0, backgroundColor: "#fff" }}>
         <LinearGradient colors={["#1E3A8A", "#1E40AF"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
           style={{ paddingTop: Platform.OS === "ios" ? 50 : 40, paddingBottom: 16, paddingHorizontal: 20 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
@@ -324,12 +324,17 @@ function LocationPickerModal({
           </View>
         </LinearGradient>
 
-        <View style={{ flex: 1, backgroundColor: "#f0f0f0" }}>
+        <View style={{ flex: 1, minHeight: 0, backgroundColor: "#f0f0f0" }}>
           {Platform.OS === "web" ? (
             <View
               ref={mapContainerRef}
               onLayout={onWebMapContainerLayout}
-              style={{ flex: 1, width: "100%", minHeight: Math.max(320, height * 0.45) }}
+              collapsable={false}
+              style={{
+                flex: 1,
+                width: "100%",
+                minHeight: Math.max(320, layoutHeight * 0.45),
+              }}
             />
           ) : (
             <LocationPickerMapNative
