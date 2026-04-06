@@ -2,14 +2,16 @@ import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
-  RefreshControl, Alert, TextInput, Modal,
+  RefreshControl, Alert, TextInput, Modal, Image,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
 import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   User, Mail, Phone, BookOpen, LogOut,
   ChevronRight, AlertCircle, RefreshCw, Settings,
   HelpCircle, Shield, Building2, Edit3, X, Save,
+  Office,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore }        from "@/store/authStore";
 import { Typography }          from "@/theme/typography";
@@ -92,6 +94,8 @@ export default function CustomerProfileScreen() {
     phone:      "",
     address:    "",
   });
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [imageFile, setImageFile] = useState<File | null>(null);
 
   const fetchProfile = async (isRefresh = false) => {
     if (!token) return;
@@ -99,6 +103,8 @@ export default function CustomerProfileScreen() {
     setError(null);
     try {
       const data = await getCustomerProfile(token);
+      console.log("[Profile] Fetched profile data:", JSON.stringify(data, null, 2));
+      console.log("[Profile] Profile picture URL:", data.profile_picture);
       setProfile(data);
     } catch (err: any) {
       setError(err?.data?.detail ?? err?.message ?? "Failed to load profile.");
@@ -118,8 +124,38 @@ export default function CustomerProfileScreen() {
       phone:      profile?.phone      ?? "",
       address:    profile?.address    ?? "",
     });
+    setSelectedImage(profile?.profile_picture ?? null);
+    setImageFile(null);
     setEditErrors({});
     setEditOpen(true);
+  };
+
+  /* ── pick image ── */
+  const pickImage = async () => {
+    // Request permission
+    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert("Permission Required", "Please grant camera roll permissions to upload a profile picture.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      const asset = result.assets[0];
+      setSelectedImage(asset.uri);
+      
+      // Convert to File object for upload
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const file = new File([blob], `profile_${Date.now()}.jpg`, { type: 'image/jpeg' });
+      setImageFile(file);
+    }
   };
 
   /* ── save ── */
@@ -128,24 +164,38 @@ export default function CustomerProfileScreen() {
     setSaving(true);
     setEditErrors({});
     try {
-      const updated = await updateCustomerProfile(
-        {
-          first_name: editForm.first_name.trim(),
-          last_name:  editForm.last_name.trim(),
-          phone:      editForm.phone.trim(),
-          address:    editForm.address.trim(),
-        } as UpdateCustomerPayload,
-        token,
-      );
+      const payload: UpdateCustomerPayload = {
+        first_name: editForm.first_name.trim(),
+        last_name:  editForm.last_name.trim(),
+        phone:      editForm.phone.trim(),
+        address:    editForm.address.trim(),
+      };
+
+      // Add profile picture if selected
+      if (imageFile) {
+        payload.profile_picture = imageFile;
+      }
+
+      const updated = await updateCustomerProfile(payload, token);
+      console.log("[Profile] Updated profile data:", JSON.stringify(updated, null, 2));
+      console.log("[Profile] Updated profile picture URL:", updated.profile_picture);
       setProfile(updated);
       setUser({ ...updated, role: "customer" } as any);
       setEditOpen(false);
+      setSelectedImage(null);
+      setImageFile(null);
+      
+      // Force refresh to ensure we have the latest data
+      setTimeout(() => {
+        fetchProfile(true);
+      }, 500);
+      
       Alert.alert("✓ Saved", "Your profile has been updated successfully.");
     } catch (err: any) {
       console.log("[ProfileSave]", JSON.stringify(err?.data ?? err));
       const d = err?.data ?? {};
       const inline: Record<string, string> = {};
-      const fields = ["first_name", "last_name", "phone", "address"];
+      const fields = ["first_name", "last_name", "phone", "address", "profile_picture"];
       let hasField = false;
       for (const f of fields) {
         if (d[f]) { inline[f] = Array.isArray(d[f]) ? d[f][0] : d[f]; hasField = true; }
@@ -230,6 +280,27 @@ export default function CustomerProfileScreen() {
           </LinearGradient>
 
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 24, paddingBottom: 40 }}>
+            {/* Profile Picture Section */}
+            <View style={{ alignItems: "center", marginBottom: 24 }}>
+              <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 12, color: "#64748B", marginBottom: 12 }}>Profile Picture</Text>
+              <TouchableOpacity onPress={pickImage} style={{ position: "relative" }}>
+                <View style={{ width: 100, height: 100, borderRadius: 50, backgroundColor: "#F1F5F9", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#E2E8F0", overflow: "hidden" }}>
+                  {selectedImage ? (
+                    <Image source={{ uri: selectedImage }} style={{ width: "100%", height: "100%", resizeMode: "cover" }} />
+                  ) : (
+                    <User size={32} color="#94A3B8" />
+                  )}
+                </View>
+                <View style={{ position: "absolute", bottom: 0, right: 0, width: 28, height: 28, borderRadius: 14, backgroundColor: "#06B6D4", alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: "#fff" }}>
+                  <Edit3 size={12} color="#fff" />
+                </View>
+              </TouchableOpacity>
+              <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#94A3B8", marginTop: 8 }}>Tap to change photo</Text>
+              {editErrors.profile_picture && (
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#EF4444", marginTop: 4 }}>⚠ {editErrors.profile_picture}</Text>
+              )}
+            </View>
+
             <EditField 
               label="First Name" 
               value={editForm.first_name} 
@@ -282,8 +353,25 @@ export default function CustomerProfileScreen() {
           <View style={{ alignItems: "center" }}
           >
             {/* Avatar */}
-            <View style={{ width: 86, height: 86, borderRadius: 28, backgroundColor: "rgba(6,182,212,0.2)", alignItems: "center", justifyContent: "center", marginBottom: 16, borderWidth: 2.5, borderColor: "rgba(6,182,212,0.5)" }}>
-              <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize: 30, color: "#06B6D4" }}>{initials}</Text>
+            <View style={{ width: 86, height: 86, borderRadius: 28, backgroundColor: "rgba(6,182,212,0.2)", alignItems: "center", justifyContent: "center", marginBottom: 16, borderWidth: 2.5, borderColor: "rgba(6,182,212,0.5)", overflow: "hidden" }}>
+              {profile?.profile_picture ? (
+                <Image 
+                  source={{ 
+                    uri: profile.profile_picture.startsWith('https://') 
+                      ? profile.profile_picture 
+                      : profile.profile_picture.replace('http://', 'https://')
+                  }} 
+                  style={{ width: "100%", height: "100%", resizeMode: "cover" }}
+                  onError={(error) => {
+                    console.log("[Profile] Image loading error:", error.nativeEvent);
+                    console.log("[Profile] Trying alternative URL...");
+                  }}
+                  onLoad={() => console.log("[Profile] Image loaded successfully")}
+                  defaultSource={require("../../assets/Logo.png")}
+                />
+              ) : (
+                <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize: 30, color: "#06B6D4" }}>{initials}</Text>
+              )}
             </View>
 
             <Text style={{ fontFamily: Typography.fonts.extrabold, fontSize: 22, color: "#fff", marginBottom: 4 }}>{fullName}</Text>
@@ -322,7 +410,7 @@ export default function CustomerProfileScreen() {
             <View style={{ backgroundColor: "#fff", borderRadius: 20, paddingHorizontal: 16, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
               <MenuRow icon={BookOpen}   label="My Bookings"   onPress={() => router.push("/(customer)/booking" as any)} />
               <MenuRow icon={Settings}   label="Settings"      onPress={() => {}} />
-              <MenuRow icon={Building2}  label="Our Offices"   onPress={() => router.push("/(customer)/offices" as any)} />
+              <MenuRow icon={Office}  label="Our Offices"   onPress={() => router.push("/(customer)/offices" as any)} />
               <MenuRow icon={HelpCircle} label="Help & Support" onPress={() => {}} />
               <MenuRow icon={Shield}     label="Privacy Policy" onPress={() => {}} />
               <MenuRow icon={LogOut}     label="Sign Out"      onPress={handleLogout} danger />

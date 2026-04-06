@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, TouchableOpacity, Modal,
-  ActivityIndicator, TextInput, StatusBar, Platform,
+  ActivityIndicator, TextInput, StatusBar, Platform, Image,
 } from "react-native";
 import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
@@ -140,7 +140,7 @@ export default function ProviderLoginScreen() {
           <ArrowLeft size={20} color="#fff" />
         </TouchableOpacity>
         <View style={{ width:60, height:60, borderRadius:20, backgroundColor:"rgba(6,182,212,0.2)", alignItems:"center", justifyContent:"center", marginBottom:18, borderWidth:1.5, borderColor:"rgba(6,182,212,0.3)" }}>
-          <Text style={{ fontSize:28 }}>🔧</Text>
+          <Image source={require("../../../assets/Logo.png")} style={{ width: 80, height: 80, resizeMode: "contain" }} />
         </View>
         <Text style={{ fontFamily:Typography.fonts.extrabold, fontSize:28, color:"#fff", marginBottom:6 }}>Provider Login</Text>
         <Text style={{ fontFamily:Typography.fonts.regular, fontSize:14, color:"rgba(255,255,255,0.5)", lineHeight:20 }}>Sign in to manage your jobs and earnings</Text>

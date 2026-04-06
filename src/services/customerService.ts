@@ -21,6 +21,7 @@ export interface UpdateCustomerPayload {
   last_name?:  string;
   phone?:      string;
   address?:    string;
+  profile_picture?: File;
 }
 
 export interface FavoriteProvider {
@@ -49,11 +50,39 @@ export const getCustomerProfile = (token: string) =>
   apiRequest<CustomerProfile>("/customers/me/", { method:"GET" }, token);
 
 // PATCH /api/v1/customers/me/
-export const updateCustomerProfile = (payload: UpdateCustomerPayload, token: string) =>
-  apiRequest<CustomerProfile>("/customers/me/", {
-    method: "PATCH",
-    body:   JSON.stringify(payload),
-  }, token);
+export const updateCustomerProfile = (payload: UpdateCustomerPayload, token: string) => {
+  // If profile_picture is included, use FormData for file upload
+  if (payload.profile_picture) {
+    const formData = new FormData();
+    
+    // Add text fields
+    if (payload.first_name !== undefined) formData.append('first_name', payload.first_name);
+    if (payload.last_name !== undefined) formData.append('last_name', payload.last_name);
+    if (payload.phone !== undefined) formData.append('phone', payload.phone);
+    if (payload.address !== undefined) formData.append('address', payload.address);
+    
+    // Add file
+    formData.append('profile_picture', payload.profile_picture);
+    
+    return apiRequest<CustomerProfile>("/customers/me/", {
+      method: "PATCH",
+      body: formData,
+    }, token);
+  } else {
+    // Regular JSON update
+    const jsonPayload = {
+      ...(payload.first_name !== undefined && { first_name: payload.first_name }),
+      ...(payload.last_name !== undefined && { last_name: payload.last_name }),
+      ...(payload.phone !== undefined && { phone: payload.phone }),
+      ...(payload.address !== undefined && { address: payload.address }),
+    };
+    
+    return apiRequest<CustomerProfile>("/customers/me/", {
+      method: "PATCH",
+      body: JSON.stringify(jsonPayload),
+    }, token);
+  }
+};
 
 // GET /api/v1/customers/favorites/
 export const getFavorites = async (token: string): Promise<FavoriteProvider[]> => {

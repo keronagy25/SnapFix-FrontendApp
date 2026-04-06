@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
   TextInput, StatusBar, Platform, useWindowDimensions,
-  Modal, Animated, Pressable, ActivityIndicator,
+  Modal, Animated, Pressable, ActivityIndicator, Image,
 } from "react-native";
 import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
