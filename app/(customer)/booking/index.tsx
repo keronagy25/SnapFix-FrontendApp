@@ -8,7 +8,7 @@ import { router }         from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Plus, Clock, CheckCircle, XCircle, AlertCircle,
-  Calendar, MapPin, Zap, RefreshCw, Briefcase, ChevronRight,
+  Calendar, MapPin, Zap, RefreshCw, Briefcase, ChevronRight,DollarSign,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore }   from "@/store/authStore";
 import { Typography }     from "@/theme/typography";
@@ -17,9 +17,10 @@ import {
   type ServiceRequest, type BookingStatus,
 } from "@/services/bookingService";
 
-const STATUS: Record<BookingStatus, { label:string; color:string; bg:string; icon:any }> = {
+const STATUS: Record<BookingStatus, { label: string; color: string; bg: string; icon: any }> = {
   pending:     { label:"Pending",     color:"#F59E0B", bg:"#FFFBEB", icon:Clock       },
   assigned:    { label:"Assigned",    color:"#3B82F6", bg:"#EFF6FF", icon:Briefcase   },
+  quoted:      { label:"Quoted",      color:"#8B5CF6", bg:"#F5F3FF", icon:DollarSign  }, // ADD THIS LINE
   confirmed:   { label:"Confirmed",   color:"#8B5CF6", bg:"#F5F3FF", icon:CheckCircle },
   in_progress: { label:"In Progress", color:"#06B6D4", bg:"#ECFEFF", icon:Zap         },
   completed:   { label:"Completed",   color:"#10B981", bg:"#ECFDF5", icon:CheckCircle },

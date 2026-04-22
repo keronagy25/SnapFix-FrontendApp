@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect } from "react";
 import { View, Platform } from "react-native";
 import { Stack } from "expo-router";
+import { StripeProvider } from "@stripe/stripe-react-native";
+import Constants from 'expo-constants';
 import {
   useFonts,
   Poppins_400Regular,
@@ -18,6 +20,11 @@ try {
     ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
   }
 } catch {}
+
+// Get Stripe publishable key from app.json extra or environment
+const stripeKey = Constants.expoConfig?.extra?.stripePublishableKey || 
+                  process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY || 
+                  "";
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -45,11 +52,17 @@ export default function RootLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="index"      />
-      <Stack.Screen name="(auth)"     />
-      <Stack.Screen name="(customer)" />
-      <Stack.Screen name="(provider)" />
-    </Stack>
+    <StripeProvider 
+      publishableKey={stripeKey}
+      merchantIdentifier="merchant.com.snapfix.app"
+      urlScheme="snapfix"
+    >
+      <Stack screenOptions={{ headerShown: false }}>
+        <Stack.Screen name="index" />
+        <Stack.Screen name="(auth)" />
+        <Stack.Screen name="(customer)" />
+        <Stack.Screen name="(provider)" />
+      </Stack>
+    </StripeProvider>
   );
 }

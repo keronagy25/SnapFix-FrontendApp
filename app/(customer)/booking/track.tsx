@@ -23,6 +23,8 @@ import {
   AlertCircle,
   Zap,
   Info,
+  DollarSign,
+  Briefcase,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore } from "@/store/authStore";
 import { Typography } from "@/theme/typography";
@@ -33,9 +35,10 @@ import {
 import type { BookingStatus } from "@/services/bookingService";
 import { formatEtaFromDistanceKm } from "@/utils/trackingGeo";
 
+// FIXED: Added missing 'quoted' status
 const STATUS: Record<
   BookingStatus,
-  { label: string; color: string; bg: string; icon: typeof Clock; desc: string }
+  { label: string; color: string; bg: string; icon: any; desc: string }
 > = {
   pending: {
     label: "Pending",
@@ -48,8 +51,15 @@ const STATUS: Record<
     label: "Assigned",
     color: "#3B82F6",
     bg: "#EFF6FF",
-    icon: Info,
+    icon: Briefcase,
     desc: "A provider has been assigned. Awaiting confirmation.",
+  },
+  quoted: {
+    label: "Quoted",
+    color: "#8B5CF6",
+    bg: "#F5F3FF",
+    icon: DollarSign,
+    desc: "Provider submitted price. Review & approve.",
   },
   confirmed: {
     label: "Confirmed",
@@ -122,6 +132,60 @@ function Card({ children }: { children: React.ReactNode }) {
       }}
     >
       {children}
+    </View>
+  );
+}
+
+function TimelineRow({
+  label,
+  value,
+}: {
+  label: string;
+  value?: string | null;
+}) {
+  if (!value) return null;
+  const formatted = new Date(value).toLocaleString("en-EG", {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return (
+    <View
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        marginBottom: 10,
+      }}
+    >
+      <View
+        style={{
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: "#1E3A8A",
+          marginRight: 10,
+        }}
+      />
+      <Text
+        style={{
+          fontFamily: Typography.fonts.semibold,
+          fontSize: 13,
+          color: "#0F172A",
+          flex: 1,
+        }}
+      >
+        {label}
+      </Text>
+      <Text
+        style={{
+          fontFamily: Typography.fonts.regular,
+          fontSize: 12,
+          color: "#94A3B8",
+        }}
+      >
+        {formatted}
+      </Text>
     </View>
   );
 }
@@ -713,10 +777,12 @@ export default function TrackBookingScreen() {
           <SectionLabel>TIMELINE</SectionLabel>
           <Card>
             <TimelineRow label="Provider assigned" value={tracking?.assigned_at} />
+            <TimelineRow label="Quote submitted" value={tracking?.quoted_price ? tracking?.assigned_at : undefined} />
             <TimelineRow label="Confirmed" value={tracking?.confirmed_at} />
             <TimelineRow label="Started" value={tracking?.started_at} />
             <TimelineRow label="Completed" value={tracking?.completed_at} />
             <TimelineRow label="Cancelled" value={tracking?.cancelled_at} />
+            <TimelineRow label="Declined" value={tracking?.declined_at} />
           </Card>
 
           {isTerminal && (
@@ -779,60 +845,6 @@ export default function TrackBookingScreen() {
           </TouchableOpacity>
         </View>
       </ScrollView>
-    </View>
-  );
-}
-
-function TimelineRow({
-  label,
-  value,
-}: {
-  label: string;
-  value?: string | null;
-}) {
-  if (!value) return null;
-  const formatted = new Date(value).toLocaleString("en-EG", {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        marginBottom: 10,
-      }}
-    >
-      <View
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 4,
-          backgroundColor: "#1E3A8A",
-          marginRight: 10,
-        }}
-      />
-      <Text
-        style={{
-          fontFamily: Typography.fonts.semibold,
-          fontSize: 13,
-          color: "#0F172A",
-          flex: 1,
-        }}
-      >
-        {label}
-      </Text>
-      <Text
-        style={{
-          fontFamily: Typography.fonts.regular,
-          fontSize: 12,
-          color: "#94A3B8",
-        }}
-      >
-        {formatted}
-      </Text>
     </View>
   );
 }

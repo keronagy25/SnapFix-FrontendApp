@@ -1,12 +1,16 @@
 import { apiRequest } from "./api";
 import { applyTrackingMetricsToBooking } from "@/utils/trackingGeo";
+import { Platform } from 'react-native';
 
 /* ═══════════════════════════════════════════════════════════════
    TYPES
 ═══════════════════════════════════════════════════════════════ */
 export type BookingStatus =
-  | "pending" | "assigned" | "confirmed"
+  | "pending" | "assigned" | "quoted" | "confirmed"
   | "in_progress" | "completed" | "cancelled" | "declined";
+
+export type PaymentMethod = "cash" | "card" | "wallet";
+export type PaymentStatus = "pending" | "paid" | "failed";
 
 export interface Review {
   id:         string;
@@ -20,11 +24,10 @@ export interface ProviderCard {
   first_name:      string;
   last_name:       string;
   business_name:   string;
-  rating:          number;
+  rating:          number | null;
   total_reviews:   number;
   completion_rate: number;
   profile_picture: string | null;
-  /** Present when API exposes last known position (used for client-side distance). */
   latitude?:       number | string | null;
   longitude?:      number | string | null;
 }
@@ -44,15 +47,28 @@ export interface ServiceRequest {
   category:             { id: number; name: string };
   region:               { id: number; name: string };
   address:              string;
-  latitude:             string | null;
-  longitude:            string | null;
+  floor_number?:        string;
+  apartment_number?:    string;
+  special_mark?:        string;
+  latitude:             number | string | null;
+  longitude:            number | string | null;
   title:                string;
   description:          string;
   is_urgent:            boolean;
   preferred_date:       string;
   preferred_time:       string;
   estimated_price:      string | null;
+  quoted_price:         string | null;
   final_price:          string | null;
+  
+  // PAYMENT FIELDS
+  payment_method:       PaymentMethod;
+  payment_method_display: string;
+  wallet_amount:        string;
+  card_amount:          string | null;
+  payment_status:       PaymentStatus;
+  payment_status_display: string;
+  
   cancelled_by:         string;
   cancelled_by_display: string;
   cancellation_reason:  string;
@@ -66,34 +82,49 @@ export interface ServiceRequest {
   cancelled_at:         string | null;
   declined_at:          string | null;
 
-  // ✅ ADD THESE — tracking fields (null until provider sends location ping)
+  // TRACKING FIELDS
   provider_distance_km:  number | null;
   provider_eta_minutes:  number | null;
-  provider:              ProviderCard | null;  // ✅ move here from HistoryDetail
+  distance_km:           number | null;
+  provider:              ProviderCard | null;
 }
 
-// History detail — role-aware (customer gets provider card, provider gets customer card)
 export interface HistoryDetail extends ServiceRequest {
   is_favorite_provider?: boolean;
-  customer?:             CustomerCard | null;
-  // provider is inherited from ServiceRequest as ProviderCard | null ✅
+  customer?:            CustomerCard | null;
 }
 
 export interface CreateBookingPayload {
-  category:        number;
-  region:          number;
-  address:         string;
-  title:           string;
-  description:     string;
-  preferred_date:  string;
-  preferred_time:  string;
-  floor_number?:   string;
+  category:          number;
+  region:            number;
+  address:           string;
+  title:             string;
+  description:       string;
+  preferred_date:    string;
+  preferred_time:    string;
+  floor_number?:     string;
   apartment_number?: string;
-  special_mark?:   string;
-  latitude?:       number;
-  longitude?:      number;
-  is_urgent?:      boolean;
-  estimated_price?: string;
+  special_mark?:     string;
+  latitude?:         number;
+  longitude?:        number;
+  is_urgent?:        boolean;
+  estimated_price?:  string;
+  payment_method?:   PaymentMethod;
+  wallet_amount?:    string;
+}
+
+export interface ApproveQuotePayload {
+  payment_method?:   PaymentMethod;
+  wallet_amount?:    string;
+}
+
+export interface InitiateCardPaymentPayload {
+  stripe_payment_method_id: string;
+  return_url?: string;  // ✅ ADDED: Required by backend
+}
+
+export interface PaymentInitiateResponse extends ServiceRequest {
+  stripe_client_secret: string;
 }
 
 interface Paginated<T> {
@@ -104,11 +135,9 @@ interface Paginated<T> {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SHARED ENDPOINTS (role-aware)
+   SHARED ENDPOINTS
 ═══════════════════════════════════════════════════════════════ */
 
-// GET /api/v1/bookings/requests/?status=<status>
-// Customer → their requests | Provider → their jobs
 export const getBookings = async (token: string, status?: string): Promise<ServiceRequest[]> => {
   const url = status
     ? `/bookings/requests/?status=${status}`
@@ -117,16 +146,13 @@ export const getBookings = async (token: string, status?: string): Promise<Servi
   return res.results ?? [];
 };
 
-// GET /api/v1/bookings/requests/<id>/
 export const getBookingById = async (id: string, token: string): Promise<ServiceRequest> => {
   const raw = await apiRequest<ServiceRequest>(`/bookings/requests/${id}/`, { method: "GET" }, token);
-  return applyTrackingMetricsToBooking(raw as Record<string, unknown>) as ServiceRequest;
+  return applyTrackingMetricsToBooking(raw as unknown as Record<string, unknown>) as unknown as ServiceRequest;
 };
 
-/** Poll this for live tracking — same payload as getBookingById (distance/ETA after provider location ping). */
 export const getBookingTracking = getBookingById;
 
-// GET /api/v1/bookings/history/<id>/
 export const getHistoryDetail = (id: string, token: string) =>
   apiRequest<HistoryDetail>(`/bookings/history/${id}/`, { method:"GET" }, token);
 
@@ -134,23 +160,87 @@ export const getHistoryDetail = (id: string, token: string) =>
    CUSTOMER ENDPOINTS
 ═══════════════════════════════════════════════════════════════ */
 
-// POST /api/v1/bookings/requests/
-export const createBooking = (payload: CreateBookingPayload, token: string) =>
-  apiRequest<ServiceRequest>("/bookings/requests/", {
-    method: "POST",
-    body:   JSON.stringify(payload),
-  }, token);
+// Helper function to convert image URI to blob for FormData
+const uriToBlob = async (uri: string): Promise<Blob> => {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return blob;
+};
 
-// POST /api/v1/bookings/requests/<id>/cancel/
+// Main createBooking function with proper FormData
+export const createBooking = async (payload: CreateBookingPayload, token: string, photos?: string[]) => {
+  const formData = new FormData();
+  
+  // Add all text fields
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      formData.append(key, String(value));
+    }
+  });
+  
+  // Add photos if present
+  if (photos && photos.length > 0) {
+    for (let i = 0; i < photos.length; i++) {
+      const photoUri = photos[i];
+      const filename = `photo_${Date.now()}_${i}.jpg`;
+      
+      if (Platform.OS === 'web') {
+        const blob = await uriToBlob(photoUri);
+        formData.append('photos', blob, filename);
+      } else {
+        // @ts-ignore
+        formData.append('photos', {
+          uri: photoUri,
+          type: 'image/jpeg',
+          name: filename,
+        });
+      }
+    }
+  }
+  
+  console.log('📸 Sending booking with photos:', photos?.length || 0);
+  
+  const response = await apiRequest<ServiceRequest>("/bookings/requests/", {
+    method: "POST",
+    body: formData,
+  }, token);
+  
+  return response;
+};
+
 export const cancelBooking = async (id: string, token: string, reason?: string) => {
   const raw = await apiRequest<ServiceRequest>(`/bookings/requests/${id}/cancel/`, {
     method: "POST",
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
-  return applyTrackingMetricsToBooking(raw as Record<string, unknown>) as ServiceRequest;
+  return applyTrackingMetricsToBooking(raw as unknown as Record<string, unknown>) as unknown as ServiceRequest;
 };
 
-// POST /api/v1/bookings/requests/<id>/rate/
+export const approveQuote = async (id: string, token: string, payload: ApproveQuotePayload = {}) => {
+  const raw = await apiRequest<ServiceRequest>(`/bookings/requests/${id}/approve-quote/`, {
+    method: "POST",
+    body:   JSON.stringify(payload),
+  }, token);
+  return applyTrackingMetricsToBooking(raw as unknown as Record<string, unknown>) as unknown as ServiceRequest;
+};
+
+export const rejectQuote = async (id: string, token: string) => {
+  const raw = await apiRequest<ServiceRequest>(`/bookings/requests/${id}/reject-quote/`, {
+    method: "POST",
+  }, token);
+  return applyTrackingMetricsToBooking(raw as unknown as Record<string, unknown>) as unknown as ServiceRequest;
+};
+
+export const initiateCardPayment = async (id: string, token: string, payload: InitiateCardPaymentPayload): Promise<PaymentInitiateResponse> => {
+  console.log("Calling initiateCardPayment with:", { id, payload });
+  const res = await apiRequest<PaymentInitiateResponse>(`/bookings/requests/${id}/initiate-card-payment/`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  }, token);
+  console.log("initiateCardPayment response:", res);
+  return res;
+};
+
 export const rateBooking = (id: string, token: string, rating: number, comment?: string) =>
   apiRequest<Review>(`/bookings/requests/${id}/rate/`, {
     method: "POST",
@@ -161,7 +251,6 @@ export const rateBooking = (id: string, token: string, rating: number, comment?:
    PROVIDER ENDPOINTS
 ═══════════════════════════════════════════════════════════════ */
 
-// GET /api/v1/bookings/requests/open/
 export const getOpenJobs = async (token: string): Promise<ServiceRequest[]> => {
   const res = await apiRequest<Paginated<ServiceRequest>>(
     "/bookings/requests/open/", { method:"GET" }, token
@@ -169,7 +258,6 @@ export const getOpenJobs = async (token: string): Promise<ServiceRequest[]> => {
   return res.results ?? [];
 };
 
-// GET /api/v1/bookings/requests/incoming/
 export const getIncomingJobs = async (token: string): Promise<ServiceRequest[]> => {
   const res = await apiRequest<Paginated<ServiceRequest>>(
     "/bookings/requests/incoming/", { method:"GET" }, token
@@ -177,33 +265,32 @@ export const getIncomingJobs = async (token: string): Promise<ServiceRequest[]> 
   return res.results ?? [];
 };
 
-// POST /api/v1/bookings/requests/<id>/pick/
 export const pickJob = (id: string, token: string) =>
   apiRequest<ServiceRequest>(`/bookings/requests/${id}/pick/`, { method:"POST" }, token);
 
-// POST /api/v1/bookings/requests/<id>/accept/
 export const acceptJob = (id: string, token: string) =>
   apiRequest<ServiceRequest>(`/bookings/requests/${id}/accept/`, { method:"POST" }, token);
 
-// POST /api/v1/bookings/requests/<id>/decline/
+export const quoteJob = (id: string, token: string, price: string) =>
+  apiRequest<ServiceRequest>(`/bookings/requests/${id}/quote/`, {
+    method: "POST",
+    body:   JSON.stringify({ price }),
+  }, token);
+
 export const declineJob = (id: string, token: string, reason?: string) =>
   apiRequest<ServiceRequest>(`/bookings/requests/${id}/decline/`, {
     method: "POST",
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
 
-// POST /api/v1/bookings/requests/<id>/start/
 export const startJob = (id: string, token: string) =>
   apiRequest<ServiceRequest>(`/bookings/requests/${id}/start/`, { method:"POST" }, token);
 
-// POST /api/v1/bookings/requests/<id>/complete/
-export const completeJob = (id: string, token: string, final_price?: string) =>
+export const completeJob = (id: string, token: string) =>
   apiRequest<ServiceRequest>(`/bookings/requests/${id}/complete/`, {
     method: "POST",
-    body:   JSON.stringify({ final_price: final_price ?? "" }),
   }, token);
 
-// POST /api/v1/bookings/requests/<id>/provider-cancel/
 export const providerCancelJob = (id: string, token: string, reason?: string) =>
   apiRequest<ServiceRequest>(`/bookings/requests/${id}/provider-cancel/`, {
     method: "POST",

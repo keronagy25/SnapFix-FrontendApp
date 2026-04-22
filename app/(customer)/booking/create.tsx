@@ -3,7 +3,7 @@ import {
   View, Text, ScrollView, TouchableOpacity,
   StatusBar, Platform, ActivityIndicator,
   TextInput, Switch, Modal, Dimensions,
-  KeyboardAvoidingView, Alert,
+  KeyboardAvoidingView, Alert, Image,
   type LayoutChangeEvent,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
@@ -11,10 +11,11 @@ import { LocationPickerMapNative } from "./location-picker-map";
 import type { LocationPickerMapNativeRef } from "./location-picker-map/types";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import {
   ArrowLeft, ChevronDown, CheckCircle, Zap,
   Calendar, Clock, ChevronLeft, ChevronRight, AlertCircle,
-  MapPin, Navigation, Crosshair,
+  MapPin, Navigation, Crosshair, DollarSign, Plus, X, Image as ImageIcon,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore } from "@/store/authStore";
 import { Typography } from "@/theme/typography";
@@ -23,7 +24,6 @@ import { createBooking, type CreateBookingPayload } from "@/services/bookingServ
 
 const { width, height } = Dimensions.get('window');
 
-// Helper function to round coordinates to 6 decimal places
 const roundCoordinates = (lat: number, lng: number) => {
   return {
     latitude: parseFloat(lat.toFixed(6)),
@@ -106,7 +106,6 @@ function SelectPill({ selected, onPress, placeholder, hasError }: {
   );
 }
 
-// Location Picker Modal
 function LocationPickerModal({ 
   visible, 
   onSelect, 
@@ -388,7 +387,6 @@ function LocationPickerModal({
   );
 }
 
-// Category Picker Modal
 function CategoryPickerModal({ visible, items, onSelect, onClose }: {
   visible: boolean; items: Category[]; onSelect: (item: Category) => void; onClose: () => void;
 }) {
@@ -414,7 +412,6 @@ function CategoryPickerModal({ visible, items, onSelect, onClose }: {
   );
 }
 
-// Region Picker Modal
 function RegionPickerModal({ visible, items, onSelect, onClose }: {
   visible: boolean; items: Region[]; onSelect: (item: Region) => void; onClose: () => void;
 }) {
@@ -440,7 +437,6 @@ function RegionPickerModal({ visible, items, onSelect, onClose }: {
   );
 }
 
-// Calendar Picker
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -544,7 +540,6 @@ function CalendarPicker({ visible, value, onSelect, onClose }: {
   );
 }
 
-// Time Picker
 function TimePicker({ visible, value, onSelect, onClose }: {
   visible: boolean; value: string; onSelect: (t: string) => void; onClose: () => void;
 }) {
@@ -626,7 +621,69 @@ function TimePicker({ visible, value, onSelect, onClose }: {
   );
 }
 
-// Main Screen
+// ✅ PAYMENT METHOD PICKER MODAL
+function PaymentMethodModal({ visible, selected, onSelect, onClose }: {
+  visible: boolean; selected: string; onSelect: (method: string) => void; onClose: () => void;
+}) {
+  if (!visible) return null;
+
+  const methods = [
+    { key: "cash", label: "💵 Cash", desc: "Pay provider directly in person" },
+    { key: "wallet", label: "👛 Wallet", desc: "Use your in-app wallet balance" },
+    { key: "card", label: "💳 Card", desc: "Pay with credit/debit card via Stripe" },
+  ];
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" }}>
+        <TouchableOpacity style={{ flex: 1 }} onPress={onClose} activeOpacity={1} />
+        <View style={{ backgroundColor: "#fff", borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 20, paddingBottom: Platform.OS === "ios" ? 40 : 24 }}>
+          <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: "#E2E8F0", alignSelf: "center", marginBottom: 16 }} />
+          <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 17, color: "#0F172A", marginBottom: 14 }}>Payment Method</Text>
+          <ScrollView showsVerticalScrollIndicator={false}>
+            {methods.map((method) => (
+              <TouchableOpacity
+                key={method.key}
+                onPress={() => {
+                  onSelect(method.key);
+                  onClose();
+                }}
+                style={{
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: "#F1F5F9",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <View
+                  style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 10,
+                    borderWidth: 2,
+                    borderColor: selected === method.key ? "#1E3A8A" : "#CBD5E1",
+                    backgroundColor: selected === method.key ? "#1E3A8A" : "transparent",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {selected === method.key && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#fff" }} />}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 14, color: "#0F172A" }}>{method.label}</Text>
+                  <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#64748B", marginTop: 2 }}>{method.desc}</Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function BookingCreateScreen() {
   const token = useAuthStore((s) => s.token);
   const params = useLocalSearchParams<{ category_id?: string; category_name?: string; is_urgent?: string }>();
@@ -638,12 +695,17 @@ export default function BookingCreateScreen() {
   const [calPicker, setCalPicker] = useState(false);
   const [timePicker, setTimePicker] = useState(false);
   const [locationPicker, setLocationPicker] = useState(false);
+  const [paymentMethodPicker, setPaymentMethodPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [apiError, setApiError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; title: string; msg: string } | null>(null);
+  
+  // ✅ NEW: Photo states
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
 
   const [form, setForm] = useState({
     category_id: params.category_id ? Number(params.category_id) : 0,
@@ -662,11 +724,67 @@ export default function BookingCreateScreen() {
     preferred_time: "09:00:00",
     is_urgent: params.is_urgent === "true",
     estimated_price: "",
+    payment_method: "cash" as "cash" | "card" | "wallet",
+    wallet_amount: "",
   });
 
   const set = (key: string, val: any) => {
     setForm(f => ({ ...f, [key]: val }));
     setErrors(e => { const n = { ...e }; delete n[key]; return n; });
+  };
+
+  // ✅ Photo picker functions
+  const requestPermissions = async () => {
+    if (Platform.OS !== 'web') {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Needed', 'Please grant camera roll permissions to upload photos');
+        return false;
+      }
+      
+      const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
+      if (cameraStatus.status !== 'granted') {
+        Alert.alert('Permission Needed', 'Please grant camera permissions to take photos');
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const pickImages = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsMultipleSelection: true,
+      quality: 0.8,
+      base64: false,
+    });
+
+    if (!result.canceled && result.assets) {
+      const newPhotos = result.assets.map(asset => asset.uri);
+      setPhotos([...photos, ...newPhotos]);
+    }
+  };
+
+  const takePhoto = async () => {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return;
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      quality: 0.8,
+      base64: false,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setPhotos([...photos, result.assets[0].uri]);
+    }
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos(photos.filter((_, i) => i !== index));
   };
 
   useEffect(() => {
@@ -696,6 +814,7 @@ export default function BookingCreateScreen() {
     if (!form.description.trim()) e.description = "Description is required";
     if (!form.preferred_date) e.preferred_date = "Please select a date";
     if (!form.preferred_time) e.preferred_time = "Please select a time";
+    if (photos.length === 0) e.photos = "Please upload at least one photo of the issue";
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -709,7 +828,7 @@ export default function BookingCreateScreen() {
 
   const handleSubmit = async () => {
     if (!validate()) {
-      setFeedback({ ok: false, title: "Required Fields", msg: "Please fill in all required fields before submitting." });
+      setFeedback({ ok: false, title: "Required Fields", msg: "Please fill in all required fields and upload at least one photo." });
       return;
     }
     if (!token) {
@@ -739,10 +858,12 @@ export default function BookingCreateScreen() {
         longitude: longitude,
         is_urgent: form.is_urgent,
         estimated_price: form.estimated_price.trim() || undefined,
+        payment_method: form.payment_method,
+        wallet_amount: form.wallet_amount.trim() || undefined,
       };
       
-      console.log("Submitting payload:", JSON.stringify(payload, null, 2));
-      const response = await createBooking(payload, token);
+      console.log("Submitting payload with photos:", photos.length);
+      const response = await createBooking(payload, token, photos);
       console.log("Response:", response);
       setSuccess(true);
     } catch (err: any) {
@@ -755,7 +876,8 @@ export default function BookingCreateScreen() {
         preferred_date: "preferred_date", preferred_time: "preferred_time",
         floor_number: "floor_number", apartment_number: "apartment_number",
         latitude: "latitude", longitude: "longitude",
-        special_mark: "special_mark",
+        special_mark: "special_mark", payment_method: "payment_method",
+        wallet_amount: "wallet_amount", photos: "photos",
       };
       
       const inline: Record<string, string> = {};
@@ -846,7 +968,6 @@ export default function BookingCreateScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#1E3A8A" />
       {feedback && <FeedbackModal ok={feedback.ok} title={feedback.title} msg={feedback.msg} onClose={() => setFeedback(null)} />}
 
-      {/* Header */}
       <LinearGradient colors={["#1E3A8A", "#1E40AF"]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
         style={{ paddingTop: Platform.OS === "android" ? 48 : 60, paddingBottom: 24, paddingHorizontal: 20 }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -871,6 +992,93 @@ export default function BookingCreateScreen() {
             <Text style={{ flex: 1, fontFamily: Typography.fonts.medium, fontSize: 13, color: "#EF4444" }}>{apiError}</Text>
           </View>
         )}
+
+        {/* ✅ PHOTO UPLOAD SECTION - NEW */}
+        <View>
+          <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 15, color: "#0F172A", marginBottom: 14 }}>
+              📸 Photos <Text style={{ color: "#EF4444" }}>* (Required - at least 1)</Text>
+            </Text>
+            
+            {/* Photo Grid */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {photos.map((photo, index) => (
+                <View key={index} style={{ position: 'relative' }}>
+                  <Image 
+                    source={{ uri: photo }} 
+                    style={{ width: 100, height: 100, borderRadius: 12 }}
+                  />
+                  <TouchableOpacity
+                    onPress={() => removePhoto(index)}
+                    style={{
+                      position: 'absolute',
+                      top: -8,
+                      right: -8,
+                      backgroundColor: '#EF4444',
+                      borderRadius: 12,
+                      padding: 4,
+                    }}
+                  >
+                    <X size={16} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              
+              {/* Add Photo Buttons */}
+              <TouchableOpacity
+                onPress={pickImages}
+                style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: 12,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderStyle: 'dashed',
+                }}
+              >
+                <ImageIcon size={24} color="#64748B" />
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#64748B", marginTop: 4 }}>
+                  Gallery
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                onPress={takePhoto}
+                style={{
+                  width: 100,
+                  height: 100,
+                  borderRadius: 12,
+                  backgroundColor: "#F1F5F9",
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 1,
+                  borderColor: "#E2E8F0",
+                  borderStyle: 'dashed',
+                }}
+              >
+                <Plus size={24} color="#64748B" />
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#64748B", marginTop: 4 }}>
+                  Camera
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {errors.photos && (
+              <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#EF4444", marginTop: 12 }}>
+                ⚠ {errors.photos}
+              </Text>
+            )}
+            
+            {photos.length > 0 && (
+              <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#10B981", marginTop: 8 }}>
+                ✓ {photos.length} photo(s) selected
+              </Text>
+            )}
+          </View>
+        </View>
 
         {/* SERVICE DETAILS */}
         <View>
@@ -902,7 +1110,7 @@ export default function BookingCreateScreen() {
           </View>
         </View>
 
-        {/* LOCATION DETAILS with Floor, Apartment, and Special Mark */}
+        {/* LOCATION DETAILS */}
         <View>
           <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
             <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 15, color: "#0F172A", marginBottom: 14 }}>📍 Location Details</Text>
@@ -923,7 +1131,6 @@ export default function BookingCreateScreen() {
               </TouchableOpacity>
             </Field>
             
-            {/* Floor and Apartment Number - Side by Side */}
             <View style={{ flexDirection: "row", gap: 12, marginBottom: 14 }}>
               <View style={{ flex: 1 }}>
                 <Field label="Floor Number">
@@ -949,7 +1156,6 @@ export default function BookingCreateScreen() {
               </View>
             </View>
             
-            {/* Special Mark */}
             <Field label="Special Mark (Optional)">
               <TextInput
                 value={form.special_mark}
@@ -961,7 +1167,6 @@ export default function BookingCreateScreen() {
               />
             </Field>
             
-            {/* Coordinates Display */}
             {(form.latitude && form.longitude) && (
               <View style={{ marginTop: 8, padding: 10, backgroundColor: "#F0F9FF", borderRadius: 12 }}>
                 <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#0369A1" }}>
@@ -1010,6 +1215,57 @@ export default function BookingCreateScreen() {
           </View>
         </View>
 
+        {/* ✅ PAYMENT METHOD */}
+        <View>
+          <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 15, color: "#0F172A", marginBottom: 14 }}>💳 Payment</Text>
+            
+            <Field label="Payment Method">
+              <SelectPill
+                selected={form.payment_method === "cash" ? "💵 Cash" : form.payment_method === "wallet" ? "👛 Wallet" : "💳 Card"}
+                onPress={() => setPaymentMethodPicker(true)}
+                placeholder="Select payment method"
+              />
+            </Field>
+
+            {form.payment_method === "card" && (
+              <Field label="Wallet Amount (Optional)">
+                <TextInput
+                  value={form.wallet_amount}
+                  onChangeText={v => set("wallet_amount", v)}
+                  placeholder="How much from wallet? (0 = none)"
+                  keyboardType="decimal-pad"
+                  style={baseInput}
+                />
+              </Field>
+            )}
+
+            {form.payment_method === "wallet" && (
+              <View style={{ backgroundColor: "#ECFDF5", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#A7F3D0" }}>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#065F46" }}>
+                  Full payment will come from your wallet balance.
+                </Text>
+              </View>
+            )}
+
+            {form.payment_method === "card" && (
+              <View style={{ backgroundColor: "#EFF6FF", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#BFDBFE" }}>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#1E40AF" }}>
+                  Card will be charged after approval. You can adjust wallet amount when confirming the quote.
+                </Text>
+              </View>
+            )}
+
+            {form.payment_method === "cash" && (
+              <View style={{ backgroundColor: "#FFFBEB", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "#FDE68A" }}>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#92400E" }}>
+                  Pay the provider directly in cash when they arrive.
+                </Text>
+              </View>
+            )}
+          </View>
+        </View>
+
         {/* BOOKING SUMMARY */}
         {(form.category_name || form.region_name || form.title || form.floor_number || form.apartment_number || form.special_mark) && (
           <View>
@@ -1027,6 +1283,8 @@ export default function BookingCreateScreen() {
               {form.preferred_time && <SRow label="Time" value={displayTime(form.preferred_time)} />}
               {form.is_urgent && <SRow label="Urgency" value="🚨 Urgent" />}
               {form.estimated_price && <SRow label="Est. Price" value={`${form.estimated_price} EGP`} />}
+              {form.payment_method && <SRow label="Payment" value={form.payment_method === "cash" ? "💵 Cash" : form.payment_method === "wallet" ? "👛 Wallet" : "💳 Card"} />}
+              {photos.length > 0 && <SRow label="Photos" value={`${photos.length} photo(s) attached`} />}
             </View>
           </View>
         )}
@@ -1052,6 +1310,7 @@ export default function BookingCreateScreen() {
       <LocationPickerModal visible={locationPicker} onSelect={handleLocationSelect} onClose={() => setLocationPicker(false)} initialLat={form.latitude} initialLng={form.longitude} />
       <CalendarPicker visible={calPicker} value={form.preferred_date} onSelect={d => set("preferred_date", d)} onClose={() => setCalPicker(false)} />
       <TimePicker visible={timePicker} value={form.preferred_time} onSelect={t => set("preferred_time", t)} onClose={() => setTimePicker(false)} />
+      <PaymentMethodModal visible={paymentMethodPicker} selected={form.payment_method} onSelect={m => set("payment_method", m)} onClose={() => setPaymentMethodPicker(false)} />
     </KeyboardAvoidingView>
   );
 }

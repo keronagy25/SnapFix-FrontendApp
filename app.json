@@ -48,14 +48,21 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "SnapFix needs access to upload documents.",
-          "cameraPermission": "SnapFix needs camera access."
+          "photosPermission": "SnapFix needs access to upload photos of your service requests.",
+          "cameraPermission": "SnapFix needs camera access to take photos of your service requests."
         }
       ],
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "SnapFix needs your location to find nearby service providers."
+        }
+      ],
+      [
+        "@stripe/stripe-react-native",
+        {
+          "merchantIdentifier": "merchant.com.snapfix.app",
+          "enableGooglePay": true
         }
       ]
     ],
@@ -66,7 +73,8 @@
       "router": {},
       "eas": {
         "projectId": "a4550c39-e113-4512-b197-1284eb10f656"
-      }
+      },
+      "stripePublishableKey": "pk_test_51TK2JQ3yWHy1kqh30Bywq0OGdXoWKU55V7UxRq9GtoOPllK4DX3oAIWJ4Hc59gxxRfjuRXHsdk7H90dBQdkFD97Z00rta0hBeE"
     }
   }
 }

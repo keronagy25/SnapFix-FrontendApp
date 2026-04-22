@@ -1,3 +1,5 @@
+// app/(provider)/jobs/[id].tsx - Updated version
+
 import React, { useEffect, useState } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity,
@@ -9,19 +11,20 @@ import { LinearGradient } from "expo-linear-gradient";
 import {
   ArrowLeft, MapPin, Calendar, Clock, DollarSign,
   FileText, Tag, CheckCircle, XCircle, Play, Flag,
-  AlertCircle, RefreshCw, Star, Navigation,
+  AlertCircle, RefreshCw, Star, Navigation, CreditCard, Wallet,
 } from "@/components/ui/lucide-icon";
-import { useAuthStore }  from "@/store/authStore";
-import { Typography }    from "@/theme/typography";
+import { useAuthStore } from "@/store/authStore";
+import { Typography } from "@/theme/typography";
 import {
-  getHistoryDetail, acceptJob, declineJob,
+  getHistoryDetail, quoteJob, acceptJob, declineJob,
   startJob, completeJob, providerCancelJob,
   type ServiceRequest, type HistoryDetail,
 } from "@/services/bookingService";
 
 const STATUS: Record<string, { label: string; color: string; bg: string; desc: string }> = {
   pending:     { label:"Pending",     color:"#F59E0B", bg:"#FFFBEB", desc:"Waiting for provider assignment." },
-  assigned:    { label:"Assigned",    color:"#3B82F6", bg:"#EFF6FF", desc:"Assigned to you — accept or decline." },
+  assigned:    { label:"Assigned",    color:"#3B82F6", bg:"#EFF6FF", desc:"Assigned to you — quote or accept directly." },
+  quoted:      { label:"Quoted",      color:"#8B5CF6", bg:"#F5F3FF", desc:"You quoted the job — awaiting customer approval." },
   confirmed:   { label:"Confirmed",   color:"#8B5CF6", bg:"#F5F3FF", desc:"You accepted — job is scheduled." },
   in_progress: { label:"In Progress", color:"#06B6D4", bg:"#ECFEFF", desc:"You are currently working on this job." },
   completed:   { label:"Completed",   color:"#10B981", bg:"#ECFDF5", desc:"Job finished. Earnings updated." },
@@ -61,7 +64,6 @@ function Row({ icon: Icon, label, value, color="#3B82F6", last=false }: {
 function LocationRow({ label, address, latitude, longitude, color = "#EF4444" }: {
   label: string; address: string; latitude?: number | string | null; longitude?: number | string | null; color?: string;
 }) {
-  // Convert string coordinates to numbers, handle null
   const lat = latitude ? parseFloat(String(latitude)) : undefined;
   const lon = longitude ? parseFloat(String(longitude)) : undefined;
   const hasCoords = lat !== undefined && lon !== undefined && !isNaN(lat) && !isNaN(lon);
@@ -75,13 +77,10 @@ function LocationRow({ label, address, latitude, longitude, color = "#EF4444" }:
     let url = "";
 
     if (Platform.OS === "web") {
-      // Web: Open Google Maps in browser
       url = `https://www.google.com/maps/search/?api=1&query=${lat},${lon}&zoom=16`;
     } else if (Platform.OS === "ios") {
-      // iOS: Apple Maps
       url = `maps:?q=${encodeURIComponent(address)}&ll=${lat},${lon}`;
     } else {
-      // Android: Google Maps
       url = `geo:${lat},${lon}?q=${encodeURIComponent(address)}`;
     }
 
@@ -147,7 +146,7 @@ function ReasonModal({ visible, title, confirmLabel="Confirm", danger=false, onC
   );
 }
 
-function FinalPriceModal({ visible, onConfirm, onClose }: {
+function QuoteModal({ visible, onConfirm, onClose }: {
   visible:boolean; onConfirm:(p:string)=>void; onClose:()=>void;
 }) {
   const [price, setPrice] = useState("");
@@ -156,8 +155,8 @@ function FinalPriceModal({ visible, onConfirm, onClose }: {
     <Modal visible transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.5)", justifyContent:"center", paddingHorizontal:24 }}>
         <View style={{ backgroundColor:"#fff", borderRadius:24, padding:24 }}>
-          <Text style={{ fontFamily: Typography.fonts.bold, fontSize:17, color:"#0F172A", marginBottom:6 }}>Complete Job</Text>
-          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"#64748B", marginBottom:16 }}>Enter final price (optional).</Text>
+          <Text style={{ fontFamily: Typography.fonts.bold, fontSize:17, color:"#0F172A", marginBottom:6 }}>Submit Quote</Text>
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"#64748B", marginBottom:16 }}>Enter price in EGP</Text>
           <TextInput value={price} onChangeText={setPrice} placeholder="e.g. 250.00" keyboardType="decimal-pad"
             style={{ fontFamily: Typography.fonts.regular, fontSize:14, color:"#0F172A", backgroundColor:"#F8FAFC", borderRadius:12, borderWidth:1.5, borderColor:"#E2E8F0", paddingHorizontal:14, height:50, marginBottom:16 }}
           />
@@ -166,8 +165,41 @@ function FinalPriceModal({ visible, onConfirm, onClose }: {
               <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:14, color:"#64748B" }}>Back</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => { onConfirm(price); setPrice(""); }}
-              style={{ flex:2, paddingVertical:13, borderRadius:14, backgroundColor:"#10B981", alignItems:"center" }}>
-              <Text style={{ fontFamily: Typography.fonts.bold, fontSize:14, color:"#fff" }}>Mark Complete</Text>
+              disabled={!price.trim()}
+              style={{ flex:2, paddingVertical:13, borderRadius:14, backgroundColor:price.trim()?"#0F172A":"#CBD5E1", alignItems:"center" }}>
+              <Text style={{ fontFamily: Typography.fonts.bold, fontSize:14, color:"#fff" }}>Confirm Quote</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ActionFeedbackModal({ data, onClose }: {
+  data: { title: string; msg: string } | null; onClose: () => void;
+}) {
+  if (!data) return null;
+  const isSuccess = data.title.startsWith("✓");
+  return (
+    <Modal visible transparent animationType="fade" onRequestClose={onClose}>
+      <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.5)", justifyContent:"center", paddingHorizontal:24 }}>
+        <View style={{ backgroundColor:"#fff", borderRadius:24, overflow:"hidden" }}>
+          <View style={{ backgroundColor: isSuccess ? "#10B981" : "#EF4444", paddingVertical:20, alignItems:"center" }}>
+            <Text style={{ fontSize:40 }}>{isSuccess ? "✅" : "⚠️"}</Text>
+          </View>
+          <View style={{ padding:24, alignItems:"center" }}>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize:18, color:"#0F172A", marginBottom:10, textAlign:"center" }}>
+              {data.title}
+            </Text>
+            <View style={{ backgroundColor:isSuccess?"#ECFDF5":"#FEF2F2", borderRadius:14, padding:14, borderWidth:1, borderColor:isSuccess?"#A7F3D0":"#FECACA", marginBottom:20, width:"100%" }}>
+              <Text style={{ fontFamily: Typography.fonts.regular, fontSize:14, color:isSuccess?"#065F46":"#991B1B", textAlign:"center", lineHeight:22 }}>
+                {data.msg}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={onClose}
+              style={{ width:"100%", paddingVertical:14, borderRadius:16, backgroundColor: isSuccess ? "#10B981" : "#0F172A", alignItems:"center" }}>
+              <Text style={{ fontFamily: Typography.fonts.bold, fontSize:15, color:"#fff" }}>OK</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -177,18 +209,20 @@ function FinalPriceModal({ visible, onConfirm, onClose }: {
 }
 
 export default function ProviderJobDetailScreen() {
-  const { id }   = useLocalSearchParams<{ id: string }>();
-  const token    = useAuthStore((s) => s.token);
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const token = useAuthStore((s) => s.token);
 
-  const [job,        setJob]        = useState<HistoryDetail | null>(null);
-  const [loading,    setLoading]    = useState(true);
+  const [job, setJob] = useState<HistoryDetail | null>(null);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error,      setError]      = useState<string | null>(null);
-  const [acting,     setActing]     = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
 
-  const [showDecline,  setShowDecline]  = useState(false);
-  const [showCancel,   setShowCancel]   = useState(false);
-  const [showComplete, setShowComplete] = useState(false);
+  const [showDecline, setShowDecline] = useState(false);
+  const [showCancel, setShowCancel] = useState(false);
+  const [showQuote, setShowQuote] = useState(false);
+  const [showCompleteConfirm, setShowCompleteConfirm] = useState(false);
+  const [actionFeed, setActionFeed] = useState<{ title: string; msg: string } | null>(null);
 
   const fetch = async (isRefresh = false) => {
     if (!token || !id) return;
@@ -196,6 +230,14 @@ export default function ProviderJobDetailScreen() {
     setError(null);
     try {
       const data = await getHistoryDetail(id, token) as HistoryDetail;
+      console.log("📊 Fetched job:", {
+        id: data.id,
+        status: data.status,
+        payment_method: data.payment_method,
+        payment_status: data.payment_status,
+        final_price: data.final_price,
+        card_amount: data.card_amount,
+      });
       setJob(data);
     } catch (err: any) {
       setError(err?.data?.detail ?? err?.message ?? "Failed to load job.");
@@ -204,26 +246,75 @@ export default function ProviderJobDetailScreen() {
 
   useEffect(() => { fetch(); }, [id, token]);
 
+  // Simplified: Check if card payment is required
+  // Card payment is ready when final_price is set (quote approved)
+  const isCardPaymentRequired = (): boolean => {
+    if (!job) return false;
+    
+    // If payment is already paid, definitely not required
+    if (job.payment_status === "paid") {
+      return false;
+    }
+    
+    // Cash jobs - never required
+    if (job.payment_method === "cash") {
+      return false;
+    }
+    
+    // Wallet jobs - never required (deducted at completion)
+    if (job.payment_method === "wallet") {
+      return false;
+    }
+    
+    // For card jobs:
+    // If final_price is set (quote was approved), the payment can be processed
+    // The backend will handle capturing the payment when job completes
+    if (job.payment_method === "card" && job.final_price && parseFloat(job.final_price) > 0) {
+      console.log("✅ Card job ready for completion (final_price:", job.final_price, ")");
+      return false;
+    }
+    
+    // If we get here, something is wrong
+    console.log("⚠️ Card payment required - no final_price or invalid state");
+    return true;
+  };
+
+  const handleCompletePress = () => {
+    if (isCardPaymentRequired()) {
+      Alert.alert(
+        "Cannot Complete Job",
+        "⚠️ Cannot complete this card payment job.\n\nPlease make sure the customer has approved the quote first.",
+        [{ text: "OK", style: "default" }]
+      );
+    } else {
+      setShowCompleteConfirm(true);
+    }
+  };
+
   const act = async (fn: () => Promise<ServiceRequest>, successMsg: string) => {
     if (!token || !id) return;
     setActing(true);
     try {
       const updated = await fn();
-      setJob(updated);
-      Alert.alert("✓ Success", successMsg);
+      setJob(updated as HistoryDetail);
+      setActionFeed({ title: "✓ Success", msg: successMsg });
     } catch (err: any) {
       console.log("[JobDetail]", JSON.stringify(err?.data ?? err));
-      const d   = err?.data ?? {};
+      const d = err?.data ?? {};
       const msg = d?.detail ?? d?.non_field_errors?.[0] ?? err?.message ?? "Action failed.";
-      Alert.alert("Error", msg);
+      setActionFeed({ title: "Error", msg });
     } finally { setActing(false); }
   };
 
-  const doAccept  = () => act(() => acceptJob(id!, token!),                      "Job confirmed. Get ready!");
-  const doDecline = (r: string) => { setShowDecline(false);  act(() => declineJob(id!, token!, r),        "Job declined."); };
-  const doStart   = () => act(() => startJob(id!, token!),                       "Job started. Good luck!");
-  const doComplete= (p: string) => { setShowComplete(false); act(() => completeJob(id!, token!, p||undefined), "Job complete! Earnings updated."); };
-  const doCancel  = (r: string) => { setShowCancel(false);   act(() => providerCancelJob(id!, token!, r), "Job cancelled."); };
+  const doAccept = () => act(() => acceptJob(id!, token!), "Job confirmed! Get ready.");
+  const doDecline = (r: string) => { setShowDecline(false); act(() => declineJob(id!, token!, r), "Job declined."); };
+  const doQuote = (p: string) => { setShowQuote(false); act(() => quoteJob(id!, token!, p), `Quoted ${p} EGP. Waiting for customer approval.`); };
+  const doStart = () => act(() => startJob(id!, token!), "Job started! Good luck.");
+  const doComplete = () => { 
+    setShowCompleteConfirm(false); 
+    act(() => completeJob(id!, token!), "Job completed! Payment settled and earnings updated.");
+  };
+  const doCancel = (r: string) => { setShowCancel(false); act(() => providerCancelJob(id!, token!, r), "Job cancelled."); };
 
   if (loading) {
     return (
@@ -257,9 +348,60 @@ export default function ProviderJobDetailScreen() {
     <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
       <StatusBar barStyle="light-content" backgroundColor="#0F172A" />
 
-      <ReasonModal visible={showDecline}  title="Decline Job"  confirmLabel="Decline"    danger onConfirm={doDecline}  onClose={() => setShowDecline(false)}  />
-      <ReasonModal visible={showCancel}   title="Cancel Job"   confirmLabel="Cancel Job" danger onConfirm={doCancel}   onClose={() => setShowCancel(false)}   />
-      <FinalPriceModal visible={showComplete} onConfirm={doComplete} onClose={() => setShowComplete(false)} />
+      <ReasonModal visible={showDecline} title="Decline Job" confirmLabel="Decline" danger onConfirm={doDecline} onClose={() => setShowDecline(false)} />
+      <ReasonModal visible={showCancel} title="Cancel Job" confirmLabel="Cancel Job" danger onConfirm={doCancel} onClose={() => setShowCancel(false)} />
+      <QuoteModal visible={showQuote} onConfirm={doQuote} onClose={() => setShowQuote(false)} />
+      <ActionFeedbackModal data={actionFeed} onClose={() => setActionFeed(null)} />
+
+      <Modal visible={showCompleteConfirm} transparent animationType="fade" onRequestClose={() => setShowCompleteConfirm(false)}>
+        <View style={{ flex:1, backgroundColor:"rgba(0,0,0,0.5)", justifyContent:"center", paddingHorizontal:24 }}>
+          <View style={{ backgroundColor:"#fff", borderRadius:24, padding:24 }}>
+            <View style={{ alignItems:"center", marginBottom:20 }}>
+              <Flag size={48} color="#10B981" />
+            </View>
+            <Text style={{ fontFamily: Typography.fonts.bold, fontSize:17, color:"#0F172A", marginBottom:10, textAlign:"center" }}>
+              Complete Job?
+            </Text>
+            <Text style={{ fontFamily: Typography.fonts.regular, fontSize:13, color:"#64748B", marginBottom:20, textAlign:"center" }}>
+              Once completed, the customer will be charged {job.final_price ? `${job.final_price} EGP` : "the approved amount"}.
+              This action cannot be undone.
+            </Text>
+            
+            {job.payment_method === "card" && (
+              <View style={{ backgroundColor:"#EFF6FF", borderRadius:12, padding:12, marginBottom:16 }}>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize:12, color:"#1E3A8A", textAlign:"center" }}>
+                  💳 Card payment will be processed automatically
+                </Text>
+              </View>
+            )}
+            
+            {job.payment_method === "wallet" && (
+              <View style={{ backgroundColor:"#ECFDF5", borderRadius:12, padding:12, marginBottom:16 }}>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize:12, color:"#065F46", textAlign:"center" }}>
+                  👛 Amount will be deducted from customer's wallet
+                </Text>
+              </View>
+            )}
+            
+            {job.payment_method === "cash" && (
+              <View style={{ backgroundColor:"#FFFBEB", borderRadius:12, padding:12, marginBottom:16 }}>
+                <Text style={{ fontFamily: Typography.fonts.regular, fontSize:12, color:"#92400E", textAlign:"center" }}>
+                  💵 Customer will pay cash directly to you
+                </Text>
+              </View>
+            )}
+            
+            <View style={{ flexDirection:"row", gap:10 }}>
+              <TouchableOpacity onPress={() => setShowCompleteConfirm(false)} style={{ flex:1, paddingVertical:13, borderRadius:14, backgroundColor:"#F1F5F9", alignItems:"center" }}>
+                <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:14, color:"#64748B" }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={doComplete} style={{ flex:2, paddingVertical:13, borderRadius:14, backgroundColor:"#10B981", alignItems:"center" }}>
+                <Text style={{ fontFamily: Typography.fonts.bold, fontSize:14, color:"#fff" }}>Complete Job</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom:100 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetch(true)} tintColor="#06B6D4" colors={["#06B6D4"]} />}>
@@ -290,29 +432,36 @@ export default function ProviderJobDetailScreen() {
         </LinearGradient>
 
         <View style={{ paddingHorizontal:20 }}>
-
-          <View >
-            <View style={{ backgroundColor:s.bg, borderRadius:16, padding:14, marginTop:16, flexDirection:"row", alignItems:"center", gap:10 }}>
-              <View style={{ width:8, height:8, borderRadius:4, backgroundColor:s.color }} />
-              <Text style={{ fontFamily: Typography.fonts.medium, fontSize:13, color:s.color, flex:1 }}>{s.desc}</Text>
-            </View>
+          <View style={{ backgroundColor:s.bg, borderRadius:16, padding:14, marginTop:16, flexDirection:"row", alignItems:"center", gap:10 }}>
+            <View style={{ width:8, height:8, borderRadius:4, backgroundColor:s.color }} />
+            <Text style={{ fontFamily: Typography.fonts.medium, fontSize:13, color:s.color, flex:1 }}>{s.desc}</Text>
           </View>
 
           <SectionLabel label="SERVICE DETAILS" />
           <Card>
-            <Row icon={Tag}       label="Category"        value={job.category?.name ?? ""}               color="#8B5CF6" />
-            <Row icon={FileText}  label="Description"     value={job.description}                         color="#1E3A8A" />
-            <Row icon={DollarSign}label="Estimated Price" value={job.estimated_price ? `${job.estimated_price} EGP` : ""} color="#F59E0B" />
-            <Row icon={DollarSign}label="Final Price"     value={job.final_price     ? `${job.final_price} EGP`     : ""} color="#10B981" last />
+            <Row icon={Tag} label="Category" value={job.category?.name ?? ""} color="#8B5CF6" />
+            <Row icon={FileText} label="Description" value={job.description} color="#1E3A8A" />
+            <Row icon={DollarSign} label="Estimated Price" value={job.estimated_price ? `${job.estimated_price} EGP` : ""} color="#F59E0B" />
+            <Row icon={DollarSign} label="Quoted Price" value={job.quoted_price ? `${job.quoted_price} EGP` : ""} color="#8B5CF6" />
+            <Row icon={DollarSign} label="Final Price" value={job.final_price ? `${job.final_price} EGP` : ""} color="#10B981" last />
+          </Card>
+
+          <SectionLabel label="PAYMENT INFO" />
+          <Card>
+            <Row icon={job.payment_method === "cash" ? DollarSign : job.payment_method === "card" ? CreditCard : Wallet} 
+                 label="Payment Method" 
+                 value={job.payment_method_display} 
+                 color={job.payment_method === "cash" ? "#F59E0B" : job.payment_method === "card" ? "#3B82F6" : "#10B981"} />
+            <Row icon={Wallet} label="Wallet Amount" value={job.wallet_amount && parseFloat(job.wallet_amount) > 0 ? `${job.wallet_amount} EGP` : "0 EGP"} color="#F59E0B" />
+            {job.card_amount && parseFloat(job.card_amount) > 0 && (
+              <Row icon={CreditCard} label="Card Amount" value={`${job.card_amount} EGP`} color="#06B6D4" />
+            )}
+            <Row icon={CheckCircle} label="Payment Status" value={job.payment_status_display} color={job.payment_status === "paid" ? "#10B981" : "#F59E0B"} last />
           </Card>
 
           <SectionLabel label="LOCATION & SCHEDULE" />
           <Card>
-            <LocationRow 
-              label="Region" 
-              address={job.region?.name ?? ""} 
-              color="#EF4444" 
-            />
+            <LocationRow label="Region" address={job.region?.name ?? ""} color="#EF4444" />
             <LocationRow 
               label="Address" 
               address={job.address}
@@ -320,19 +469,19 @@ export default function ProviderJobDetailScreen() {
               longitude={job.longitude}
               color="#EF4444"
             />
-            <Row icon={Calendar} label="Date"    value={job.preferred_date}            color="#3B82F6" />
-            <Row icon={Clock}    label="Time"    value={job.preferred_time?.slice(0,5) ?? ""} color="#3B82F6" last />
+            <Row icon={Calendar} label="Date" value={job.preferred_date} color="#3B82F6" />
+            <Row icon={Clock} label="Time" value={job.preferred_time?.slice(0,5) ?? ""} color="#3B82F6" last />
           </Card>
 
           <SectionLabel label="TIMELINE" />
           <Card>
             {[
-              { key:"created_at",   label:"Request Created"  },
-              { key:"assigned_at",  label:"Assigned to You"  },
-              { key:"confirmed_at", label:"You Accepted"     },
-              { key:"started_at",   label:"Work Started"     },
-              { key:"completed_at", label:"Job Completed"    },
-              { key:"cancelled_at", label:"Cancelled"        },
+              { key:"created_at", label:"Request Created" },
+              { key:"assigned_at", label:"Assigned to You" },
+              { key:"confirmed_at", label:"You Accepted" },
+              { key:"started_at", label:"Work Started" },
+              { key:"completed_at", label:"Job Completed" },
+              { key:"cancelled_at", label:"Cancelled" },
             ].filter(step => !!(job as any)[step.key])
              .map((step, i, arr) => (
               <View key={step.key} style={{ flexDirection:"row", alignItems:"flex-start", paddingVertical:12, borderBottomWidth: i<arr.length-1?1:0, borderBottomColor:"#F1F5F9" }}>
@@ -347,22 +496,21 @@ export default function ProviderJobDetailScreen() {
             ))}
           </Card>
 
-          {/* Customer card */}
-          {(job as HistoryDetail).customer && (
+          {job.customer && (
             <>
               <SectionLabel label="CUSTOMER INFORMATION" />
               <Card>
                 <View style={{ paddingVertical:12 }}>
-                  <View style={{ flexDirection:"row", alignItems:"center", gap:12, marginBottom:12 }}>
+                  <View style={{ flexDirection:"row", alignItems:"center", gap:12 }}>
                     <View style={{ width:48, height:48, borderRadius:12, backgroundColor:"#E2E8F0", alignItems:"center", justifyContent:"center" }}>
                       <Text style={{ fontSize:20 }}>👤</Text>
                     </View>
                     <View style={{ flex:1 }}>
                       <Text style={{ fontFamily: Typography.fonts.bold, fontSize:15, color:"#0F172A" }}>
-                        {(job as HistoryDetail).customer!.first_name} {(job as HistoryDetail).customer!.last_name}
+                        {job.customer.first_name} {job.customer.last_name}
                       </Text>
                       <Text style={{ fontFamily: Typography.fonts.regular, fontSize:12, color:"#94A3B8", marginTop:2 }}>
-                        {(job as HistoryDetail).customer!.total_bookings || 0} bookings
+                        {job.customer.total_bookings || 0} bookings
                       </Text>
                     </View>
                   </View>
@@ -371,7 +519,6 @@ export default function ProviderJobDetailScreen() {
             </>
           )}
 
-          {/* Review section */}
           {job.status === "completed" && job.review && (
             <>
               <SectionLabel label="CUSTOMER REVIEW" />
@@ -400,16 +547,22 @@ export default function ProviderJobDetailScreen() {
             </>
           )}
 
-          {/* Action buttons */}
           <View style={{ marginTop:24, gap:12 }}>
-
             {job.status === "assigned" && (<>
+              <TouchableOpacity onPress={() => setShowQuote(true)} disabled={acting} activeOpacity={0.88}
+                style={{ borderRadius:18, overflow:"hidden", opacity: acting?0.7:1 }}>
+                <LinearGradient colors={["#8B5CF6","#7C3AED"]} start={{x:0,y:0}} end={{x:1,y:0}}
+                  style={{ paddingVertical:16, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:10 }}>
+                  {acting ? <ActivityIndicator size="small" color="#fff" />
+                    : <><DollarSign size={18} color="#fff" /><Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Submit Quote</Text></>}
+                </LinearGradient>
+              </TouchableOpacity>
               <TouchableOpacity onPress={doAccept} disabled={acting} activeOpacity={0.88}
                 style={{ borderRadius:18, overflow:"hidden", opacity: acting?0.7:1 }}>
                 <LinearGradient colors={["#0F172A","#1E293B"]} start={{x:0,y:0}} end={{x:1,y:0}}
                   style={{ paddingVertical:16, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:10 }}>
                   {acting ? <ActivityIndicator size="small" color="#06B6D4" />
-                    : <><CheckCircle size={18} color="#06B6D4" /><Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Accept Job</Text></>}
+                    : <><CheckCircle size={18} color="#06B6D4" /><Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Accept Job (Skip Quote)</Text></>}
                 </LinearGradient>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setShowDecline(true)} disabled={acting} activeOpacity={0.88}
@@ -418,6 +571,14 @@ export default function ProviderJobDetailScreen() {
                 <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:15, color:"#64748B" }}>Decline Job</Text>
               </TouchableOpacity>
             </>)}
+
+            {job.status === "quoted" && (
+              <View style={{ backgroundColor:"#F5F3FF", borderRadius:16, padding:16, alignItems:"center" }}>
+                <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:14, color:"#6D28D9", textAlign:"center" }}>
+                  ⏳ Waiting for customer to approve your quote of {job.quoted_price} EGP
+                </Text>
+              </View>
+            )}
 
             {job.status === "confirmed" && (
               <TouchableOpacity onPress={doStart} disabled={acting} activeOpacity={0.88}
@@ -431,12 +592,16 @@ export default function ProviderJobDetailScreen() {
             )}
 
             {job.status === "in_progress" && (
-              <TouchableOpacity onPress={() => setShowComplete(true)} disabled={acting} activeOpacity={0.88}
-                style={{ borderRadius:18, overflow:"hidden", opacity: acting?0.7:1 }}>
+              <TouchableOpacity 
+                onPress={handleCompletePress} 
+                disabled={acting} 
+                activeOpacity={0.88}
+                style={{ borderRadius:18, overflow:"hidden", opacity: acting?0.7:1 }}
+              >
                 <LinearGradient colors={["#059669","#10B981"]} start={{x:0,y:0}} end={{x:1,y:0}}
                   style={{ paddingVertical:16, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:10 }}>
                   {acting ? <ActivityIndicator size="small" color="#fff" />
-                    : <><Flag size={18} color="#fff" /><Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Mark as Complete</Text></>}
+                    : <><Flag size={18} color="#fff" /><Text style={{ fontFamily: Typography.fonts.bold, fontSize:16, color:"#fff" }}>Complete Job</Text></>}
                 </LinearGradient>
               </TouchableOpacity>
             )}
@@ -448,7 +613,6 @@ export default function ProviderJobDetailScreen() {
                 <Text style={{ fontFamily: Typography.fonts.semibold, fontSize:15, color:"#EF4444" }}>Cancel Job</Text>
               </TouchableOpacity>
             )}
-
           </View>
         </View>
       </ScrollView>
