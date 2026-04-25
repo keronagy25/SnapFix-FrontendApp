@@ -143,6 +143,7 @@ Activity: (props: any) => <Feather name="activity" {...props} />,
 // Add to iconMap
 Office: (props: any) => <MaterialIcons name="business" {...props} />,
 Map: (props: any) => <MaterialIcons name="map" {...props} />,
+Check: (props: any) => <Feather name="check" {...props} />,
 };
 
 // Export all icons
@@ -239,3 +240,4 @@ export const Crosshair = (props: any) => iconMap.Crosshair(props);
 export const Activity = (props: any) => iconMap.Activity(props);
 export const Office = (props: any) => iconMap.Office(props);
 export const Map = (props: any) => iconMap.Maps(props);
+export const Check = (props: any) => iconMap.Check(props);

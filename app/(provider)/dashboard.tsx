@@ -21,6 +21,7 @@ import { Typography }         from "@/theme/typography";
 import { getProviderProfile } from "@/services/providerService";
 import { extractApiMessage } from "@/services/api";
 import { getOpenJobs, getBookings, pickJob, type ServiceRequest } from "@/services/bookingService";
+import { NotificationBellButton } from "@/components/ui/NotificationBell";
 
 /* ─── Responsive ──────────────────────────────────────────────────── */
 function useR() {
@@ -357,9 +358,9 @@ export default function ProviderDashboard() {
                   <Text style={{ fontFamily:Typography.fonts.extrabold, fontSize:r.fs(22), color:"#fff", lineHeight:28 }}>{firstName}</Text>
                 </View>
               </View>
-              <TouchableOpacity onPress={() => fetchData(true)}
+              <TouchableOpacity onPress={() => router.push("/(provider)/notifications" as any)}
                 style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.08)", alignItems:"center", justifyContent:"center" }}>
-                <RefreshCw size={18} color="#fff" />
+                <NotificationBellButton onPress={() => router.push("/(provider)/notifications" as any)} size={18} color="#fff" />
               </TouchableOpacity>
             </View>
           </View>

@@ -18,6 +18,7 @@ import { useAuthStore }    from "@/store/authStore";
 import { Typography }      from "@/theme/typography";
 import { getCategories, type Category } from "@/services/coreService";
 import { getFavorites, type FavoriteProvider } from "@/services/customerService";
+import { NotificationBellButton } from "@/components/ui/NotificationBell";
 
 /* ─── Responsive ─────────────────────────────────────────────────── */
 function useR() {
@@ -319,9 +320,10 @@ export default function CustomerHomeScreen() {
                   </TouchableOpacity>
                 </View>
               </View>
-              <TouchableOpacity style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.15)", alignItems:"center", justifyContent:"center" }}>
-                <Bell size={20} color="#fff" />
-                <View style={{ position:"absolute", top:9, right:9, width:8, height:8, borderRadius:4, backgroundColor:"#06B6D4", borderWidth:1.5, borderColor:"#1E3A8A" }} />
+              <TouchableOpacity 
+                onPress={() => router.push("/(customer)/notifications" as any)}
+                style={{ width:42, height:42, borderRadius:14, backgroundColor:"rgba(255,255,255,0.15)", alignItems:"center", justifyContent:"center" }}>
+                <NotificationBellButton onPress={() => router.push("/(customer)/notifications" as any)} size={20} color="#fff" />
               </TouchableOpacity>
             </View>
 
