@@ -3,32 +3,34 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { AuthState, UserRole, CustomerProfile, ProviderProfile } from "@/types";
 
 const TOKEN_KEY = "snapfix_auth_token";
-const ROLE_KEY  = "snapfix_auth_role";
-const BASE_URL  = "https://snap-fix-api-production.up.railway.app/api/v1";
+const ONBOARDING_TOKEN_KEY = "snapfix_onboarding_token";
+const ROLE_KEY = "snapfix_auth_role";
+const BASE_URL = "https://snap-fix-api-production.up.railway.app/api/v1";
 
 interface AuthActions {
-  setRole:         (role: UserRole) => void;
-  setUser:         (user: CustomerProfile | ProviderProfile | null) => void;
-  setToken:        (token: string | null) => void;
-  setLoading:      (loading: boolean) => void;
-  logout:          () => Promise<void>;
-  hydrateToken:    () => Promise<string | null>;
-  fetchMe:         () => Promise<void>;
+  setRole: (role: UserRole) => void;
+  setUser: (user: CustomerProfile | ProviderProfile | null) => void;
+  setToken: (token: string | null) => void;
+  setOnboardingToken: (token: string | null) => void;
+  setLoading: (loading: boolean) => void;
+  logout: () => Promise<void>;
+  hydrateToken: () => Promise<string | null>;
+  fetchMe: () => Promise<void>;
   hydrateAndFetch: () => Promise<void>;
 }
 
 const initialState: AuthState = {
-  user:            null,
-  role:            null,
+  user: null,
+  role: null,
   isAuthenticated: false,
-  isLoading:       false,
-  token:           null,
+  isLoading: false,
+  token: null,
+  onboardingToken: null,
 };
 
 export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
   ...initialState,
 
-  /* ── setRole — also persists to AsyncStorage so it survives hot-reload ── */
   setRole: (role) => {
     AsyncStorage.setItem(ROLE_KEY, role ?? "").catch(console.error);
     set({ role });
@@ -41,7 +43,6 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
         : { user: null, isAuthenticated: false }
     ),
 
-  /* ── setToken: pass null to clear ── */
   setToken: (token) => {
     if (token) {
       AsyncStorage.setItem(TOKEN_KEY, token).catch(console.error);
@@ -51,13 +52,17 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     set({ token });
   },
 
+  setOnboardingToken: (token) => {
+    if (token) {
+      AsyncStorage.setItem(ONBOARDING_TOKEN_KEY, token).catch(console.error);
+    } else {
+      AsyncStorage.removeItem(ONBOARDING_TOKEN_KEY).catch(console.error);
+    }
+    set({ onboardingToken: token });
+  },
+
   setLoading: (isLoading) => set({ isLoading }),
 
-  /* ─────────────────────────────────────────────────────────────────────
-   * fetchMe — calls the correct /me/ endpoint based on current role.
-   * Customers  → GET /customers/me/
-   * Providers  → GET /providers/me/
-   * ───────────────────────────────────────────────────────────────────── */
   fetchMe: async () => {
     const { token, role } = get();
     if (!token) return;
@@ -68,16 +73,16 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     set({ isLoading: true });
     try {
       const res = await fetch(`${BASE_URL}${endpoint}`, {
-        method:  "GET",
+        method: "GET",
         headers: {
-          "Content-Type":  "application/json",
+          "Content-Type": "application/json",
           "Authorization": `Token ${token}`,
         },
       });
 
       if (!res.ok) {
         if (res.status === 401) {
-          await AsyncStorage.multiRemove([TOKEN_KEY, ROLE_KEY]).catch(console.error);
+          await AsyncStorage.multiRemove([TOKEN_KEY, ROLE_KEY, ONBOARDING_TOKEN_KEY]).catch(console.error);
           set({ ...initialState });
         }
         return;
@@ -85,8 +90,8 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
 
       const data: CustomerProfile | ProviderProfile = await res.json();
       set({
-        user:            data,
-        role:            (data as any).role ?? role,
+        user: data,
+        role: (data as any).role ?? role,
         isAuthenticated: true,
       });
     } catch (err) {
@@ -96,10 +101,6 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     }
   },
 
-  /* ─────────────────────────────────────────────────────────────────────
-   * logout — calls the correct logout endpoint based on role,
-   * then always clears local state regardless of network result.
-   * ───────────────────────────────────────────────────────────────────── */
   logout: async () => {
     const { token, role } = get();
 
@@ -109,9 +110,9 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
     if (token) {
       try {
         await fetch(`${BASE_URL}${endpoint}`, {
-          method:  "POST",
+          method: "POST",
           headers: {
-            "Content-Type":  "application/json",
+            "Content-Type": "application/json",
             "Authorization": `Token ${token}`,
           },
         });
@@ -120,35 +121,26 @@ export const useAuthStore = create<AuthState & AuthActions>((set, get) => ({
       }
     }
 
-    await AsyncStorage.multiRemove([TOKEN_KEY, ROLE_KEY]).catch(console.error);
+    await AsyncStorage.multiRemove([TOKEN_KEY, ROLE_KEY, ONBOARDING_TOKEN_KEY]).catch(console.error);
     set({ ...initialState });
   },
 
-  /* ─────────────────────────────────────────────────────────────────────
-   * hydrateToken — restores token AND role from AsyncStorage.
-   * ───────────────────────────────────────────────────────────────────── */
   hydrateToken: async () => {
     try {
-      const [[, token], [, role]] = await AsyncStorage.multiGet([
+      const [[, token], [, role], [, onboardingToken]] = await AsyncStorage.multiGet([
         TOKEN_KEY,
         ROLE_KEY,
+        ONBOARDING_TOKEN_KEY,
       ]);
       if (token) set({ token });
-      if (role)  set({ role: role as UserRole });
+      if (role) set({ role: role as UserRole });
+      if (onboardingToken) set({ onboardingToken });
       return token;
     } catch {
       return null;
     }
   },
 
-  /* ─────────────────────────────────────────────────────────────────────
-   * hydrateAndFetch — one-shot app startup: restore token+role → fetchMe.
-   *
-   * Usage in app/_layout.tsx:
-   *   useEffect(() => {
-   *     useAuthStore.getState().hydrateAndFetch();
-   *   }, []);
-   * ───────────────────────────────────────────────────────────────────── */
   hydrateAndFetch: async () => {
     const token = await get().hydrateToken();
     if (token) await get().fetchMe();

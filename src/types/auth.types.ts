@@ -96,6 +96,7 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading:       boolean;
   token:           string | null;
+  onboardingToken: string | null;  // ← ADD THIS LINE
 }
 
 /* ─── Register Payloads (what we send TO the API) ────────────────────────── */

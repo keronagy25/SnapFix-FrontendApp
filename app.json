@@ -64,7 +64,8 @@
           "merchantIdentifier": "merchant.com.snapfix.app",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": false
