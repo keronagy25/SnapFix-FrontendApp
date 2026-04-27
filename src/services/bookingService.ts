@@ -89,6 +89,26 @@ export interface ServiceRequest {
   provider:              ProviderCard | null;
 }
 
+export interface DirectBookingPayload {
+  provider_id: string;
+  category: number;
+  region: number;
+  address: string;
+  floor_number?: string;
+  apartment_number?: string;
+  special_mark?: string;
+  latitude?: number;
+  longitude?: number;
+  title: string;
+  description: string;
+  preferred_date: string;
+  preferred_time: string;
+  is_urgent?: boolean;
+  estimated_price?: string;
+  payment_method?: PaymentMethod;
+  wallet_amount?: string;
+}
+
 export interface HistoryDetail extends ServiceRequest {
   is_favorite_provider?: boolean;
   customer?:            CustomerCard | null;
@@ -296,3 +316,48 @@ export const providerCancelJob = (id: string, token: string, reason?: string) =>
     method: "POST",
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
+
+  export const createDirectBooking = async (
+  payload: DirectBookingPayload,
+  token: string,
+  photos?: string[]
+): Promise<ServiceRequest> => {
+  const formData = new FormData();
+  
+  // Add all text fields
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      formData.append(key, String(value));
+    }
+  });
+  
+  // Add photos if present
+  if (photos && photos.length > 0) {
+    for (let i = 0; i < photos.length; i++) {
+      const photoUri = photos[i];
+      const filename = `direct_booking_${Date.now()}_${i}.jpg`;
+      
+      if (Platform.OS === 'web') {
+        const blob = await uriToBlob(photoUri);
+        formData.append('photos', blob, filename);
+      } else {
+        // @ts-ignore
+        formData.append('photos', {
+          uri: photoUri,
+          type: 'image/jpeg',
+          name: filename,
+        });
+      }
+    }
+  }
+  
+  console.log('📸 Sending direct booking with photos:', photos?.length || 0);
+  console.log('🎯 Direct booking for provider:', payload.provider_id);
+  
+  const response = await apiRequest<ServiceRequest>("/bookings/requests/direct/", {
+    method: "POST",
+    body: formData,
+  }, token);
+  
+  return response;
+};

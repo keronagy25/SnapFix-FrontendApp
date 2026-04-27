@@ -11,7 +11,8 @@ export type NotificationType =
   | "quote_approved"
   | "quote_rejected"
   | "cancelled_by_customer"
-  | "payment_settled";
+  | "payment_settled"
+  | "direct_booking_request";  // ✅ ADD THIS LINE
 
 export interface Notification {
   id: string;
@@ -20,6 +21,8 @@ export interface Notification {
   body: string;
   data: {
     service_request_id?: string;
+    customer_name?: string;  // ✅ Optional: customer name for direct booking
+    booking_title?: string;  // ✅ Optional: booking title for direct booking
   };
   is_read: boolean;
   created_at: string;
@@ -51,6 +54,7 @@ export const NOTIFICATION_NAV_MAP: Record<NotificationType, { screen: string; pa
   quote_rejected: { screen: "/(provider)/jobs" },
   cancelled_by_customer: { screen: "/(provider)/jobs" },
   payment_settled: { screen: "/(provider)/wallet" },
+  direct_booking_request: { screen: "/(provider)/jobs" },  // ✅ ADD THIS LINE - Navigates to provider jobs
 };
 
 // Get display title for notification type
@@ -67,6 +71,7 @@ export function getNotificationDisplayTitle(type: NotificationType): string {
     quote_rejected: "Quote Rejected",
     cancelled_by_customer: "Job Cancelled",
     payment_settled: "Payment Received",
+    direct_booking_request: "Direct Booking Request",  // ✅ ADD THIS LINE
   };
   return titles[type] || type;
 }

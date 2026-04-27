@@ -611,7 +611,7 @@ export default function CustomerHomeScreen() {
                       </View>
                       {/* Book */}
                       <TouchableOpacity
-                        onPress={() => router.push("/(customer)/booking/create" as any)}
+                        onPress={() => router.push("/(customer)/booking/direct" as any)}
                         style={{ backgroundColor:"#6366F1", paddingHorizontal:14, paddingVertical:9, borderRadius:12 }}>
                         <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: r.fs(12), color:"#fff" }}>Book</Text>
                       </TouchableOpacity>

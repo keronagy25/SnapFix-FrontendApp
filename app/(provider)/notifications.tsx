@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback} from "react";
+import React, { useEffect, useCallback } from "react";
 import { useFocusEffect } from "@react-navigation/native";
 import {
   View,
@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { router } from "expo-router";
-import { Bell, X, Check, ChevronRight } from "@/components/ui/lucide-icon";
+import { Bell, X, Check, ChevronRight, Heart, User, Briefcase } from "@/components/ui/lucide-icon";
 import { useNotificationStore } from "@/store/notificationStore";
 import { useAuthStore } from "@/store/authStore";
 import type { Notification, NotificationType } from "@/types/notification.types";
@@ -64,6 +64,7 @@ export default function ProviderNotificationsScreen() {
       const serviceRequestId = notification.data?.service_request_id;
 
       if (serviceRequestId) {
+        // For direct booking requests, navigate to the specific job
         router.push(`/(provider)/jobs/${serviceRequestId}` as any);
       } else {
         router.push("/(provider)/jobs" as any);
@@ -80,6 +81,34 @@ export default function ProviderNotificationsScreen() {
     router.back();
   }, []);
 
+  const getNotificationIcon = (type: NotificationType) => {
+    switch (type) {
+      case "direct_booking_request":
+        return <Heart size={20} color="#EF4444" />;
+      case "request_assigned":
+        return <Briefcase size={20} color="#3B82F6" />;
+      case "quote_approved":
+      case "quote_received":
+        return <Check size={20} color="#10B981" />;
+      default:
+        return <Bell size={20} color="#06B6D4" />;
+    }
+  };
+
+  const getNotificationIconColor = (type: NotificationType) => {
+    switch (type) {
+      case "direct_booking_request":
+        return "#FEF2F2"; // Light red background
+      case "request_assigned":
+        return "#EFF6FF"; // Light blue background
+      case "quote_approved":
+      case "quote_received":
+        return "#ECFDF5"; // Light green background
+      default:
+        return "#0F172A";
+    }
+  };
+
   const renderNotification = useCallback(
     ({ item }: { item: Notification }) => (
       <TouchableOpacity
@@ -87,14 +116,17 @@ export default function ProviderNotificationsScreen() {
         onPress={() => handleNotificationPress(item)}
         activeOpacity={0.7}
       >
-        <View style={[styles.iconContainer, { backgroundColor: "#0F172A" }]}>
-          <Bell size={20} color="#06B6D4" />
+        <View style={[styles.iconContainer, { backgroundColor: getNotificationIconColor(item.type as NotificationType) }]}>
+          {getNotificationIcon(item.type as NotificationType)}
         </View>
         <View style={styles.contentContainer}>
           <Text style={[styles.title, !item.is_read && styles.unreadTitle]}>
             {getNotificationDisplayTitle(item.type as NotificationType)}
+            {item.type === "direct_booking_request" && (
+              <Text style={styles.directBadge}> 🔥 Direct</Text>
+            )}
           </Text>
-          <Text style={styles.body} numberOfLines={2}>
+          <Text style={[styles.body, !item.is_read && styles.unreadBody]} numberOfLines={2}>
             {item.body}
           </Text>
           <Text style={styles.time}>
@@ -250,7 +282,6 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: "#334155",
     alignItems: "center",
     justifyContent: "center",
     marginRight: 12,
@@ -267,10 +298,19 @@ const styles = StyleSheet.create({
   unreadTitle: {
     color: "#FFFFFF",
   },
+  directBadge: {
+    color: "#EF4444",
+    fontSize: 12,
+    fontWeight: "500",
+  },
   body: {
     fontSize: 13,
     color: "#64748B",
     marginBottom: 4,
+    lineHeight: 18,
+  },
+  unreadBody: {
+    color: "#94A3B8",
   },
   time: {
     fontSize: 11,

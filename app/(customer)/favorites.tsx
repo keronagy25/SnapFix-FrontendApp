@@ -78,7 +78,7 @@ function ProviderCard({ provider, onRemove }: { provider:FavoriteProvider; onRem
             <Text style={{ fontFamily:Typography.fonts.bold, fontSize: fontSize(15), color:"#0F172A" }}>
               {provider.first_name} {provider.last_name}
             </Text>
-            <TouchableOpacity onPress={() => router.push("/(customer)/booking/create" as any)}
+            <TouchableOpacity onPress={() => router.push("/(customer)/booking/direct" as any)}
               style={{ backgroundColor:"#1E3A8A", paddingHorizontal: scale(12), paddingVertical: scale(4), borderRadius: scale(8) }}>
               <Text style={{ fontFamily:Typography.fonts.semibold, fontSize: fontSize(11), color:"#fff" }}>Book Again</Text>
             </TouchableOpacity>
