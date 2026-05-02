@@ -5,6 +5,7 @@ export const Typography = {
     semibold:  "Poppins_600SemiBold",
     bold:      "Poppins_700Bold",
     extrabold: "Poppins_800ExtraBold",
+    italic:    "Poppins_400Regular_Italic",
   },
   sizes: {
     xs:   10,

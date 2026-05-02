@@ -144,7 +144,10 @@ Activity: (props: any) => <Feather name="activity" {...props} />,
 Office: (props: any) => <MaterialIcons name="business" {...props} />,
 Map: (props: any) => <MaterialIcons name="map" {...props} />,
 Check: (props: any) => <Feather name="check" {...props} />,
-Brain: (props: any) => <Feather name="brain" {...props} />
+Brain: (props: any) => <Feather name="brain" {...props} />,
+
+ChevronsLeft: (props: any) => <Feather name="chevrons-left" {...props} />,
+ChevronsRight: (props: any) => <Feather name="chevrons-right" {...props} />
 };
 
 // Export all icons
@@ -243,3 +246,5 @@ export const Office = (props: any) => iconMap.Office(props);
 export const Map = (props: any) => iconMap.Maps(props);
 export const Check = (props: any) => iconMap.Check(props);
 export const Brain = (props: any) => iconMap.Brain(props);
+export const ChevronsLeft = (props: any) => iconMap.ChevronsLeft(props);
+export const ChevronsRight = (props: any) => iconMap.ChevronsRight(props);

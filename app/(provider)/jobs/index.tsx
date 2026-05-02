@@ -10,11 +10,12 @@ import {
   CheckCircle, XCircle, Play, Flag, Zap,
   MapPin, Calendar, Clock, DollarSign,
   AlertCircle, RefreshCw, ChevronRight, CreditCard, Wallet,
+  ChevronLeft, ChevronsLeft, ChevronsRight,
 } from "@/components/ui/lucide-icon";
 import { useAuthStore } from "@/store/authStore";
 import { Typography } from "@/theme/typography";
 import {
-  getIncomingJobs, getBookings, getOpenJobs,
+  getIncomingJobsPaginated, getBookingsPaginated, getOpenJobsPaginated,
   acceptJob, declineJob, startJob,
   completeJob, providerCancelJob, pickJob,
   type ServiceRequest,
@@ -113,7 +114,6 @@ function ConfirmCompleteModal({ visible, job, onConfirm, onClose }: {
   
   useEffect(() => {
     if (job) {
-      // Check if this is a card job that hasn't had payment initiated
       const needsCardPayment = job.payment_method === "card" && 
                                job.payment_status === "pending" &&
                                parseFloat(job.card_amount || "0") > 0;
@@ -233,6 +233,164 @@ function ActionFeedbackModal({ data, onClose }: {
   );
 }
 
+/* ─── Pagination Controls Component ──────────────────────────── */
+function PaginationControls({
+  currentPage,
+  totalPages,
+  onPageChange,
+  isLoading,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  isLoading: boolean;
+}) {
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  return (
+    <View style={{ 
+      marginTop: 20, 
+      marginBottom: 10,
+      paddingVertical: 12,
+      alignItems: "center",
+    }}>
+      <View style={{ 
+        flexDirection: "row", 
+        alignItems: "center", 
+        justifyContent: "center",
+        gap: 8,
+        flexWrap: "wrap",
+      }}>
+        <TouchableOpacity
+          onPress={() => onPageChange(1)}
+          disabled={currentPage === 1 || isLoading}
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === 1 ? "#E2E8F0" : "#0F172A",
+            opacity: currentPage === 1 || isLoading ? 0.5 : 1,
+          }}
+        >
+          <ChevronsLeft size={18} color={currentPage === 1 ? "#94A3B8" : "#fff"} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === 1 ? "#E2E8F0" : "#3B82F6",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            opacity: currentPage === 1 || isLoading ? 0.5 : 1,
+          }}
+        >
+          <ChevronLeft size={16} color={currentPage === 1 ? "#94A3B8" : "#fff"} />
+          <Text style={{ color: currentPage === 1 ? "#94A3B8" : "#fff", fontWeight: "600" }}>Prev</Text>
+        </TouchableOpacity>
+
+        {getPageNumbers().map((page, index) => (
+          typeof page === 'number' ? (
+            <TouchableOpacity
+              key={index}
+              onPress={() => onPageChange(page)}
+              disabled={isLoading}
+              style={{
+                minWidth: 40,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                backgroundColor: currentPage === page ? "#0F172A" : "#F1F5F9",
+                borderWidth: currentPage === page ? 0 : 1,
+                borderColor: "#E2E8F0",
+              }}
+            >
+              <Text style={{
+                textAlign: "center",
+                color: currentPage === page ? "#fff" : "#475569",
+                fontWeight: currentPage === page ? "700" : "500",
+              }}>
+                {page}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text key={index} style={{ color: "#94A3B8", paddingHorizontal: 4 }}>
+              {page}
+            </Text>
+          )
+        ))}
+
+        <TouchableOpacity
+          onPress={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === totalPages ? "#E2E8F0" : "#3B82F6",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            opacity: currentPage === totalPages || isLoading ? 0.5 : 1,
+          }}
+        >
+          <Text style={{ color: currentPage === totalPages ? "#94A3B8" : "#fff", fontWeight: "600" }}>Next</Text>
+          <ChevronRight size={16} color={currentPage === totalPages ? "#94A3B8" : "#fff"} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages || isLoading}
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === totalPages ? "#E2E8F0" : "#0F172A",
+            opacity: currentPage === totalPages || isLoading ? 0.5 : 1,
+          }}
+        >
+          <ChevronsRight size={18} color={currentPage === totalPages ? "#94A3B8" : "#fff"} />
+        </TouchableOpacity>
+      </View>
+      
+      <Text style={{
+        marginTop: 12,
+        fontFamily: Typography.fonts.regular,
+        fontSize: 12,
+        color: "#64748B",
+      }}>
+        Page {currentPage} of {totalPages}
+      </Text>
+    </View>
+  );
+}
+
 /* ─── Job card ─────────────────────────────────────────────────── */
 function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, onCancel, onPick }: {
   job: ServiceRequest; isOpenPool?: boolean;
@@ -246,7 +404,6 @@ function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, on
   const showComplete = job.status === "in_progress";
   const hasActions = isOpenPool || showAcceptDecline || showStart || showComplete;
 
-  // Get payment method icon
   const getPaymentIcon = () => {
     if (job.payment_method === "cash") return <DollarSign size={10} color="#F59E0B" />;
     if (job.payment_method === "card") return <CreditCard size={10} color="#3B82F6" />;
@@ -302,7 +459,6 @@ function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, on
                 <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#64748B" }}>{job.preferred_time.slice(0, 5)}</Text>
               </View>
             )}
-            {/* Payment Method Badge */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#F8FAFC", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
               {getPaymentIcon()}
               <Text style={{ fontFamily: Typography.fonts.medium, fontSize: 10, color: "#64748B" }}>{job.payment_method_display}</Text>
@@ -328,10 +484,8 @@ function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, on
           )}
         </TouchableOpacity>
 
-        {/* Action buttons */}
         {hasActions && (
           <View style={{ borderTopWidth: 1, borderTopColor: "#F1F5F9" }}>
-            {/* Open pool — Pick button */}
             {isOpenPool && (
               <TouchableOpacity onPress={() => onPick(job.id)} activeOpacity={0.8}
                 style={{ paddingVertical: 14, alignItems: "center", backgroundColor: "#0F172A", flexDirection: "row", justifyContent: "center", gap: 8 }}>
@@ -340,7 +494,6 @@ function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, on
               </TouchableOpacity>
             )}
 
-            {/* Incoming — Accept / Decline */}
             {showAcceptDecline && (
               <View style={{ flexDirection: "row" }}>
                 <TouchableOpacity onPress={() => onDecline(job.id)} activeOpacity={0.8}
@@ -355,7 +508,6 @@ function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, on
               </View>
             )}
 
-            {/* Start */}
             {showStart && (
               <View style={{ flexDirection: "row" }}>
                 <TouchableOpacity onPress={() => onCancel(job.id)} activeOpacity={0.8}
@@ -370,7 +522,6 @@ function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, on
               </View>
             )}
 
-            {/* Complete */}
             {showComplete && (
               <View style={{ flexDirection: "row" }}>
                 <TouchableOpacity onPress={() => onCancel(job.id)} activeOpacity={0.8}
@@ -392,17 +543,38 @@ function JobCard({ job, isOpenPool, onAccept, onDecline, onStart, onComplete, on
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   MAIN SCREEN
+   MAIN SCREEN WITH PAGINATION
 ══════════════════════════════════════════════════════════════════ */
 type Tab = "open" | "incoming" | "my-jobs";
+
+interface PaginatedData<T> {
+  results: T[];
+  count: number;
+  next: string | null;
+  previous: string | null;
+}
 
 export default function ProviderJobsScreen() {
   const token = useAuthStore((s) => s.token);
 
   const [tab, setTab] = useState<Tab>("open");
+  
+  // Pagination state for each tab
   const [openJobs, setOpenJobs] = useState<ServiceRequest[]>([]);
+  const [openPage, setOpenPage] = useState(1);
+  const [openTotalPages, setOpenTotalPages] = useState(1);
+  const [openTotalCount, setOpenTotalCount] = useState(0);
+  
   const [incoming, setIncoming] = useState<ServiceRequest[]>([]);
+  const [incomingPage, setIncomingPage] = useState(1);
+  const [incomingTotalPages, setIncomingTotalPages] = useState(1);
+  const [incomingTotalCount, setIncomingTotalCount] = useState(0);
+  
   const [myJobs, setMyJobs] = useState<ServiceRequest[]>([]);
+  const [myJobsPage, setMyJobsPage] = useState(1);
+  const [myJobsTotalPages, setMyJobsTotalPages] = useState(1);
+  const [myJobsTotalCount, setMyJobsTotalCount] = useState(0);
+  
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -412,38 +584,110 @@ export default function ProviderJobsScreen() {
   const [completeJobData, setCompleteJobData] = useState<{ id: string; job: ServiceRequest | null }>({ id: "", job: null });
   const [actionError, setActionError] = useState<{ title: string; msg: string } | null>(null);
 
+  const fetchTabData = useCallback(async (
+    tabName: Tab,
+    page: number,
+    isRefresh = false
+  ): Promise<PaginatedData<ServiceRequest> | null> => {
+    if (!token) return null;
+    
+    try {
+      if (tabName === "open") {
+        return await getOpenJobsPaginated(token, page);
+      } else if (tabName === "incoming") {
+        return await getIncomingJobsPaginated(token, page);
+      } else {
+        return await getBookingsPaginated(token, page);
+      }
+    } catch (err: any) {
+      if (!isRefresh) {
+        setError(err?.data?.detail ?? err?.message ?? "Failed to load jobs.");
+      }
+      return null;
+    }
+  }, [token]);
+
+  const loadTab = useCallback(async (tabName: Tab, page: number, isRefresh = false) => {
+    if (!token) return;
+    
+    const data = await fetchTabData(tabName, page, isRefresh);
+    
+    if (data) {
+      if (tabName === "open") {
+        setOpenJobs(data.results);
+        setOpenTotalCount(data.count);
+        setOpenTotalPages(Math.ceil(data.count / 10));
+        setOpenPage(page);
+      } else if (tabName === "incoming") {
+        setIncoming(data.results);
+        setIncomingTotalCount(data.count);
+        setIncomingTotalPages(Math.ceil(data.count / 10));
+        setIncomingPage(page);
+      } else {
+        setMyJobs(data.results);
+        setMyJobsTotalCount(data.count);
+        setMyJobsTotalPages(Math.ceil(data.count / 10));
+        setMyJobsPage(page);
+      }
+    }
+  }, [token, fetchTabData]);
+
   const fetchAll = useCallback(async (isRefresh = false) => {
     if (!token) return;
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
-    try {
-      const [open, inc, jobs] = await Promise.all([
-        getOpenJobs(token),
-        getIncomingJobs(token),
-        getBookings(token),
-      ]);
-      setOpenJobs(open);
-      setIncoming(inc);
-      setMyJobs(jobs);
-    } catch (err: any) {
-      setError(err?.data?.detail ?? err?.message ?? "Failed to load jobs.");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [token]);
+    
+    await Promise.all([
+      loadTab("open", 1, isRefresh),
+      loadTab("incoming", 1, isRefresh),
+      loadTab("my-jobs", 1, isRefresh),
+    ]);
+    
+    setLoading(false);
+    setRefreshing(false);
+  }, [token, loadTab]);
 
   useEffect(() => {
     fetchAll();
   }, [fetchAll]);
 
-  /* ── Actions ── */
+  const handlePageChange = (newPage: number) => {
+    if (tab === "open") {
+      loadTab("open", newPage);
+    } else if (tab === "incoming") {
+      loadTab("incoming", newPage);
+    } else {
+      loadTab("my-jobs", newPage);
+    }
+  };
+
+  const getCurrentPage = () => {
+    if (tab === "open") return openPage;
+    if (tab === "incoming") return incomingPage;
+    return myJobsPage;
+  };
+
+  const getTotalPages = () => {
+    if (tab === "open") return openTotalPages;
+    if (tab === "incoming") return incomingTotalPages;
+    return myJobsTotalPages;
+  };
+
+  const getCurrentCount = () => {
+    if (tab === "open") return openTotalCount;
+    if (tab === "incoming") return incomingTotalCount;
+    return myJobsTotalCount;
+  };
+
+  /* ── Actions (same as before) ── */
   const doPick = async (id: string) => {
     if (!token) return;
     try {
       const updated = await pickJob(id, token);
       setOpenJobs(p => p.filter(j => j.id !== id));
-      setIncoming(p => [updated, ...p]);
+      setOpenTotalCount(prev => prev - 1);
+      setOpenTotalPages(Math.ceil((openTotalCount - 1) / 10));
+      await loadTab("incoming", 1);
       setTab("incoming");
       setActionError({ title: "✓ Job Picked!", msg: "Job moved to Incoming. Tap Accept to confirm it." });
     } catch (err: any) {
@@ -471,7 +715,9 @@ export default function ProviderJobsScreen() {
     try {
       const updated = await acceptJob(id, token);
       setIncoming(p => p.filter(j => j.id !== id));
-      setMyJobs(p => [updated, ...p.filter(j => j.id !== id)]);
+      setIncomingTotalCount(prev => prev - 1);
+      setIncomingTotalPages(Math.ceil((incomingTotalCount - 1) / 10));
+      await loadTab("my-jobs", 1);
       setActionError({ title: "✓ Job Accepted!", msg: "Job confirmed and moved to My Jobs. Get ready!" });
     } catch (err: any) {
       setActionError({ title: "Cannot Accept Job", msg: getErrMsg(err, "Could not accept job.") });
@@ -484,6 +730,8 @@ export default function ProviderJobsScreen() {
     try {
       await declineJob(id, token, reason);
       setIncoming(p => p.filter(j => j.id !== id));
+      setIncomingTotalCount(prev => prev - 1);
+      setIncomingTotalPages(Math.ceil((incomingTotalCount - 1) / 10));
       setActionError({ title: "✓ Job Declined", msg: "Job returned to the open pool. Another provider can now pick it." });
     } catch (err: any) {
       setActionError({ title: "Cannot Decline Job", msg: getErrMsg(err, "Could not decline job.") });
@@ -501,7 +749,6 @@ export default function ProviderJobsScreen() {
     }
   };
 
-  // UPDATED: doComplete without price parameter
   const doComplete = async (id: string) => {
     if (!token) return;
     setCompleteJobData({ id: "", job: null });
@@ -528,7 +775,6 @@ export default function ProviderJobsScreen() {
     try {
       const updated = await providerCancelJob(id, token, reason);
       setMyJobs(p => p.map(j => j.id === id ? updated : j));
-      setIncoming(p => p.filter(j => j.id !== id));
       setActionError({ title: "✓ Job Cancelled", msg: "The job has been cancelled successfully." });
     } catch (err: any) {
       setActionError({ title: "Cannot Cancel Job", msg: getErrMsg(err, "Could not cancel job.") });
@@ -541,12 +787,14 @@ export default function ProviderJobsScreen() {
   };
 
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "open", label: "Open Pool", count: openJobs.length },
-    { key: "incoming", label: "Incoming", count: incoming.length },
-    { key: "my-jobs", label: "My Jobs", count: myJobs.length },
+    { key: "open", label: "Open Pool", count: openTotalCount },
+    { key: "incoming", label: "Incoming", count: incomingTotalCount },
+    { key: "my-jobs", label: "My Jobs", count: myJobsTotalCount },
   ];
 
   const displayed = tab === "open" ? openJobs : tab === "incoming" ? incoming : myJobs;
+  const currentPage = getCurrentPage();
+  const totalPages = getTotalPages();
 
   return (
     <View style={{ flex: 1, backgroundColor: "#F8FAFC" }}>
@@ -656,19 +904,31 @@ export default function ProviderJobsScreen() {
               </Text>
             </View>
           ) : (
-            displayed.map(job => (
-              <JobCard
-                key={job.id}
-                job={job}
-                isOpenPool={tab === "open"}
-                onPick={doPick}
-                onAccept={doAccept}
-                onDecline={id => setDeclineId(id)}
-                onStart={doStart}
-                onComplete={handleCompletePress}
-                onCancel={id => setCancelId(id)}
-              />
-            ))
+            <>
+              {displayed.map(job => (
+                <JobCard
+                  key={job.id}
+                  job={job}
+                  isOpenPool={tab === "open"}
+                  onPick={doPick}
+                  onAccept={doAccept}
+                  onDecline={id => setDeclineId(id)}
+                  onStart={doStart}
+                  onComplete={handleCompletePress}
+                  onCancel={id => setCancelId(id)}
+                />
+              ))}
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                  isLoading={loading || refreshing}
+                />
+              )}
+            </>
           )}
         </ScrollView>
       )}

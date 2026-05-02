@@ -61,7 +61,6 @@ export interface ServiceRequest {
   quoted_price:         string | null;
   final_price:          string | null;
   
-  // PAYMENT FIELDS
   payment_method:       PaymentMethod;
   payment_method_display: string;
   wallet_amount:        string;
@@ -82,11 +81,12 @@ export interface ServiceRequest {
   cancelled_at:         string | null;
   declined_at:          string | null;
 
-  // TRACKING FIELDS
   provider_distance_km:  number | null;
   provider_eta_minutes:  number | null;
   distance_km:           number | null;
   provider:              ProviderCard | null;
+  
+  booking_mode?:         "broadcast" | "recommended";
 }
 
 export interface DirectBookingPayload {
@@ -133,6 +133,33 @@ export interface CreateBookingPayload {
   wallet_amount?:    string;
 }
 
+export type PhotoUpload =
+  | string
+  | {
+      uri: string;
+      fileName?: string;
+      type?: string;
+      base64?: string;
+    };
+
+export interface RecommendedBookingCacheEntry {
+  payload: CreateBookingPayload;
+  photos: PhotoUpload[];
+}
+
+const recommendedBookingCache: Record<string, RecommendedBookingCacheEntry> = {};
+
+export const saveRecommendedBookingCache = (key: string, entry: RecommendedBookingCacheEntry) => {
+  recommendedBookingCache[key] = entry;
+};
+
+export const getRecommendedBookingCache = (key: string): RecommendedBookingCacheEntry | null =>
+  recommendedBookingCache[key] ?? null;
+
+export const clearRecommendedBookingCache = (key: string) => {
+  delete recommendedBookingCache[key];
+};
+
 export interface ApproveQuotePayload {
   payment_method?:   PaymentMethod;
   wallet_amount?:    string;
@@ -140,11 +167,54 @@ export interface ApproveQuotePayload {
 
 export interface InitiateCardPaymentPayload {
   stripe_payment_method_id: string;
-  return_url?: string;  // ✅ ADDED: Required by backend
+  return_url?: string;
 }
 
 export interface PaymentInitiateResponse extends ServiceRequest {
   stripe_client_secret: string;
+}
+
+// ============ RECOMMENDED BOOKING TYPES ============
+export interface ScoringSignals {
+  rating: number;
+  distance: number;
+  completion_rate: number;
+  is_favorite: boolean;
+  urgency_availability: number;
+}
+
+export interface RecommendedProvider {
+  id: string;
+  full_name: string;
+  business_name: string;
+  average_rating: string;
+  total_reviews: number;
+  completed_jobs: number;
+  hourly_rate: string | null;
+  years_of_experience: number;
+  acceptance_rate: number | null;
+  distance_km: number;
+  is_favorite: boolean;
+  score: number;
+  signals: ScoringSignals;
+  reason: string;
+}
+
+export interface ServiceRequestWithRecommendations extends ServiceRequest {
+  recommendations: RecommendedProvider[];
+}
+
+export interface Step2ErrorResponse {
+  provider_id?: string[];
+  photos?: string[];
+  category?: string[];
+  region?: string[];
+  address?: string[];
+  title?: string[];
+  description?: string[];
+  preferred_date?: string[];
+  preferred_time?: string[];
+  [key: string]: string[] | undefined;
 }
 
 interface Paginated<T> {
@@ -155,15 +225,156 @@ interface Paginated<T> {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   HELPER FUNCTIONS
+═══════════════════════════════════════════════════════════════ */
+
+const base64ToBlob = (base64: string, contentType = "image/jpeg"): Blob => {
+  const binary = atob(base64);
+  const len = binary.length;
+  const buffer = new Uint8Array(len);
+  for (let i = 0; i < len; i += 1) {
+    buffer[i] = binary.charCodeAt(i);
+  }
+  return new Blob([buffer], { type: contentType });
+};
+
+const uriToBlob = async (uri: string): Promise<Blob> => {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return blob;
+};
+
+const appendPhotoToFormData = async (
+  formData: FormData,
+  photo: PhotoUpload,
+  filename: string,
+): Promise<void> => {
+  const normalizedFilename = filename || "photo.jpg";
+  if (typeof photo === "string") {
+    if (Platform.OS === "web") {
+      const blob = await uriToBlob(photo);
+      formData.append("photos", blob, normalizedFilename);
+    } else {
+      formData.append("photos", {
+        uri: photo,
+        type: "image/jpeg",
+        name: normalizedFilename,
+      } as any);
+    }
+    return;
+  }
+
+  const contentType = photo.type || "image/jpeg";
+  const fileName = photo.fileName || normalizedFilename;
+
+  if (Platform.OS === "web") {
+    if (photo.base64) {
+      const blob = base64ToBlob(photo.base64, contentType);
+      formData.append("photos", blob, fileName);
+    } else {
+      const blob = await uriToBlob(photo.uri);
+      formData.append("photos", blob, fileName);
+    }
+  } else {
+    formData.append("photos", {
+      uri: photo.uri,
+      type: contentType,
+      name: fileName,
+    } as any);
+  }
+};
+
+export const extractErrorMessage = (errorData: any, field?: string): string | null => {
+  if (!errorData) return null;
+  
+  if (field && errorData[field]) {
+    const messages = errorData[field];
+    if (Array.isArray(messages) && messages.length > 0) {
+      return messages[0];
+    }
+    if (typeof messages === 'string') return messages;
+  }
+  
+  if (errorData.detail) return errorData.detail;
+  if (errorData.non_field_errors) {
+    const errors = errorData.non_field_errors;
+    return Array.isArray(errors) ? errors[0] : errors;
+  }
+  
+  return null;
+};
+
+/* ═══════════════════════════════════════════════════════════════
    SHARED ENDPOINTS
 ═══════════════════════════════════════════════════════════════ */
 
+// NEW: Paginated version - returns full pagination metadata
+export const getBookingsPaginated = async (
+  token: string, 
+  page: number = 1,
+  status?: string
+): Promise<Paginated<ServiceRequest>> => {
+  let url = "/bookings/requests/";
+  const params: string[] = [];
+  
+  if (status) {
+    params.push(`status=${status}`);
+  }
+  
+  if (page > 1) {
+    params.push(`page=${page}`);
+  }
+  
+  if (params.length > 0) {
+    url += `?${params.join('&')}`;
+  }
+  
+  console.log(`📄 Fetching page ${page} with URL: ${url}`);
+  
+  const res = await apiRequest<Paginated<ServiceRequest>>(url, { method: "GET" }, token);
+  
+  console.log(`✅ Page ${page}: Retrieved ${res.results?.length || 0} of ${res.count} total bookings`);
+  
+  return res;
+};
+
+// MODIFIED: Original getBookings now fetches ALL pages (no breaking changes)
 export const getBookings = async (token: string, status?: string): Promise<ServiceRequest[]> => {
-  const url = status
-    ? `/bookings/requests/?status=${status}`
-    : "/bookings/requests/";
-  const res = await apiRequest<Paginated<ServiceRequest>>(url, { method:"GET" }, token);
-  return res.results ?? [];
+  let allBookings: ServiceRequest[] = [];
+  let currentPage = 1;
+  let hasMore = true;
+  
+  console.log(`🔍 Fetching all bookings${status ? ` with status: ${status}` : ''}...`);
+  
+  while (hasMore) {
+    let url = "/bookings/requests/";
+    const params: string[] = [];
+    
+    if (status) {
+      params.push(`status=${status}`);
+    }
+    
+    if (currentPage > 1) {
+      params.push(`page=${currentPage}`);
+    }
+    
+    if (params.length > 0) {
+      url += `?${params.join('&')}`;
+    }
+    
+    const res = await apiRequest<Paginated<ServiceRequest>>(url, { method: "GET" }, token);
+    
+    if (res.results && res.results.length > 0) {
+      allBookings = [...allBookings, ...res.results];
+      hasMore = allBookings.length < res.count;
+      currentPage++;
+    } else {
+      hasMore = false;
+    }
+  }
+  
+  console.log(`✅ Total bookings fetched: ${allBookings.length}`);
+  return allBookings;
 };
 
 export const getBookingById = async (id: string, token: string): Promise<ServiceRequest> => {
@@ -180,47 +391,104 @@ export const getHistoryDetail = (id: string, token: string) =>
    CUSTOMER ENDPOINTS
 ═══════════════════════════════════════════════════════════════ */
 
-// Helper function to convert image URI to blob for FormData
-const uriToBlob = async (uri: string): Promise<Blob> => {
-  const response = await fetch(uri);
-  const blob = await response.blob();
-  return blob;
-};
-
-// Main createBooking function with proper FormData
-export const createBooking = async (payload: CreateBookingPayload, token: string, photos?: string[]) => {
+export const createBooking = async (payload: CreateBookingPayload, token: string, photos?: PhotoUpload[]) => {
   const formData = new FormData();
   
-  // Add all text fields
   Object.entries(payload).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       formData.append(key, String(value));
     }
   });
   
-  // Add photos if present
   if (photos && photos.length > 0) {
     for (let i = 0; i < photos.length; i++) {
-      const photoUri = photos[i];
+      const photo = photos[i];
       const filename = `photo_${Date.now()}_${i}.jpg`;
-      
-      if (Platform.OS === 'web') {
-        const blob = await uriToBlob(photoUri);
-        formData.append('photos', blob, filename);
-      } else {
-        // @ts-ignore
-        formData.append('photos', {
-          uri: photoUri,
-          type: 'image/jpeg',
-          name: filename,
-        });
-      }
+      await appendPhotoToFormData(formData, photo, filename);
     }
   }
   
-  console.log('📸 Sending booking with photos:', photos?.length || 0);
-  
   const response = await apiRequest<ServiceRequest>("/bookings/requests/", {
+    method: "POST",
+    body: formData,
+  }, token);
+  
+  return response;
+};
+
+// ============ STEP 1: Create recommended booking request ============
+export const createRecommendedBooking = async (
+  payload: CreateBookingPayload,
+  token: string,
+  photos?: PhotoUpload[]
+): Promise<ServiceRequestWithRecommendations> => {
+  const formData = new FormData();
+  
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      formData.append(key, String(value));
+    }
+  });
+  
+  formData.append("booking_mode", "recommended");
+  
+  if (photos && photos.length > 0) {
+    if (photos.length > 5) {
+      throw new Error("Maximum 5 photos allowed");
+    }
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      const filename = `recommended_booking_${Date.now()}_${i}.jpg`;
+      await appendPhotoToFormData(formData, photo, filename);
+    }
+  }
+  
+  console.log('📸 STEP 1: Creating RECOMMENDED booking with photos:', photos?.length || 0);
+  
+  const response = await apiRequest<ServiceRequestWithRecommendations>("/bookings/requests/", {
+    method: "POST",
+    body: formData,
+  }, token);
+  
+  return response;
+};
+
+// ============ STEP 2: Book the chosen provider via RECOMMENDED endpoint ============
+export const bookRecommendedProvider = async (
+  providerId: string,
+  originalPayload: CreateBookingPayload,
+  token: string,
+  photos?: PhotoUpload[]
+): Promise<ServiceRequest> => {
+  const formData = new FormData();
+  
+  // Add provider_id (required)
+  formData.append("provider_id", providerId);
+  
+  // Add all the same fields as Step 1 (NO booking_mode)
+  Object.entries(originalPayload).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      formData.append(key, String(value));
+    }
+  });
+  
+  // Re-upload photos (required by backend - 1-5 images)
+  if (photos && photos.length > 0) {
+    if (photos.length > 5) {
+      throw new Error("Maximum 5 photos allowed");
+    }
+    for (let i = 0; i < photos.length; i++) {
+      const photo = photos[i];
+      const filename = `step2_booking_${Date.now()}_${i}.jpg`;
+      await appendPhotoToFormData(formData, photo, filename);
+    }
+  }
+  
+  console.log('📸 STEP 2: Booking via RECOMMENDED endpoint with provider ID:', providerId);
+  console.log('📸 STEP 2: Photos count:', photos?.length || 0);
+  
+  // Use the CORRECT recommended endpoint
+  const response = await apiRequest<ServiceRequest>("/bookings/requests/recommended/", {
     method: "POST",
     body: formData,
   }, token);
@@ -268,9 +536,41 @@ export const rateBooking = (id: string, token: string, rating: number, comment?:
   }, token);
 
 /* ═══════════════════════════════════════════════════════════════
-   PROVIDER ENDPOINTS
+   PROVIDER ENDPOINTS WITH PAGINATION
 ═══════════════════════════════════════════════════════════════ */
 
+// PAGINATED VERSIONS (for ProviderJobsScreen)
+export const getOpenJobsPaginated = async (
+  token: string, 
+  page: number = 1
+): Promise<Paginated<ServiceRequest>> => {
+  let url = "/bookings/requests/open/";
+  if (page > 1) {
+    url += `?page=${page}`;
+  }
+  
+  console.log(`📄 Fetching open jobs page ${page}...`);
+  const res = await apiRequest<Paginated<ServiceRequest>>(url, { method: "GET" }, token);
+  console.log(`✅ Page ${page}: ${res.results?.length || 0} of ${res.count} open jobs`);
+  return res;
+};
+
+export const getIncomingJobsPaginated = async (
+  token: string, 
+  page: number = 1
+): Promise<Paginated<ServiceRequest>> => {
+  let url = "/bookings/requests/incoming/";
+  if (page > 1) {
+    url += `?page=${page}`;
+  }
+  
+  console.log(`📄 Fetching incoming jobs page ${page}...`);
+  const res = await apiRequest<Paginated<ServiceRequest>>(url, { method: "GET" }, token);
+  console.log(`✅ Page ${page}: ${res.results?.length || 0} of ${res.count} incoming jobs`);
+  return res;
+};
+
+// ORIGINAL NON-PAGINATED VERSIONS (kept for backward compatibility)
 export const getOpenJobs = async (token: string): Promise<ServiceRequest[]> => {
   const res = await apiRequest<Paginated<ServiceRequest>>(
     "/bookings/requests/open/", { method:"GET" }, token
@@ -317,21 +617,19 @@ export const providerCancelJob = (id: string, token: string, reason?: string) =>
     body:   JSON.stringify({ reason: reason ?? "" }),
   }, token);
 
-  export const createDirectBooking = async (
+export const createDirectBooking = async (
   payload: DirectBookingPayload,
   token: string,
   photos?: string[]
 ): Promise<ServiceRequest> => {
   const formData = new FormData();
   
-  // Add all text fields
   Object.entries(payload).forEach(([key, value]) => {
     if (value !== undefined && value !== null && value !== "") {
       formData.append(key, String(value));
     }
   });
   
-  // Add photos if present
   if (photos && photos.length > 0) {
     for (let i = 0; i < photos.length; i++) {
       const photoUri = photos[i];
@@ -350,9 +648,6 @@ export const providerCancelJob = (id: string, token: string, reason?: string) =>
       }
     }
   }
-  
-  console.log('📸 Sending direct booking with photos:', photos?.length || 0);
-  console.log('🎯 Direct booking for provider:', payload.provider_id);
   
   const response = await apiRequest<ServiceRequest>("/bookings/requests/direct/", {
     method: "POST",

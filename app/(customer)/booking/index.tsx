@@ -4,23 +4,24 @@ import {
   StatusBar, Platform, ActivityIndicator,
   RefreshControl, Modal, useWindowDimensions,
 } from "react-native";
-import { router }         from "expo-router";
+import { router } from "expo-router";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Plus, Clock, CheckCircle, XCircle, AlertCircle,
-  Calendar, MapPin, Zap, RefreshCw, Briefcase, ChevronRight,DollarSign,
+  Calendar, MapPin, Zap, RefreshCw, Briefcase, ChevronRight, DollarSign,
+  ChevronLeft, ChevronsLeft, ChevronsRight,
 } from "@/components/ui/lucide-icon";
-import { useAuthStore }   from "@/store/authStore";
-import { Typography }     from "@/theme/typography";
+import { useAuthStore } from "@/store/authStore";
+import { Typography } from "@/theme/typography";
 import {
-  getBookings, cancelBooking,
+  getBookingsPaginated, cancelBooking,
   type ServiceRequest, type BookingStatus,
 } from "@/services/bookingService";
 
 const STATUS: Record<BookingStatus, { label: string; color: string; bg: string; icon: any }> = {
   pending:     { label:"Pending",     color:"#F59E0B", bg:"#FFFBEB", icon:Clock       },
   assigned:    { label:"Assigned",    color:"#3B82F6", bg:"#EFF6FF", icon:Briefcase   },
-  quoted:      { label:"Quoted",      color:"#8B5CF6", bg:"#F5F3FF", icon:DollarSign  }, // ADD THIS LINE
+  quoted:      { label:"Quoted",      color:"#8B5CF6", bg:"#F5F3FF", icon:DollarSign  },
   confirmed:   { label:"Confirmed",   color:"#8B5CF6", bg:"#F5F3FF", icon:CheckCircle },
   in_progress: { label:"In Progress", color:"#06B6D4", bg:"#ECFEFF", icon:Zap         },
   completed:   { label:"Completed",   color:"#10B981", bg:"#ECFDF5", icon:CheckCircle },
@@ -122,7 +123,7 @@ function BookingCard({ booking, onCancel, isWide }: { booking:ServiceRequest; on
     <View style={{ marginBottom:12, width:"100%" }}>
       <View style={{ backgroundColor:"#fff", borderRadius:20, borderWidth:1, borderColor:"#F1F5F9", shadowColor:"#1E3A8A", shadowOffset:{width:0,height:3}, shadowOpacity:0.07, shadowRadius:12, elevation:3, overflow:"hidden" }}>
         
-        {/* ── Card body (keep exactly as is) ───────────────── */}
+        {/* ── Card body ───────────────── */}
         <TouchableOpacity 
           activeOpacity={0.88} 
           onPress={() => router.push(`/(customer)/booking/${booking.id}` as any)} 
@@ -282,33 +283,230 @@ function FilterChip({
   );
 }
 
+/* ─── Pagination Controls Component ──────────────────────────── */
+function PaginationControls({
+  currentPage,
+  totalPages,
+  onPageChange,
+  isLoading,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (page: number) => void;
+  isLoading: boolean;
+}) {
+  // Calculate which page numbers to show
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const maxVisible = 5;
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      if (currentPage <= 3) {
+        for (let i = 1; i <= 4; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) pages.push(i);
+      } else {
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    return pages;
+  };
+
+  return (
+    <View style={{ 
+      marginTop: 20, 
+      marginBottom: 10,
+      paddingVertical: 12,
+      alignItems: "center",
+    }}>
+      {/* Pagination Row */}
+      <View style={{ 
+        flexDirection: "row", 
+        alignItems: "center", 
+        justifyContent: "center",
+        gap: 8,
+        flexWrap: "wrap",
+      }}>
+        {/* First Page Button */}
+        <TouchableOpacity
+          onPress={() => onPageChange(1)}
+          disabled={currentPage === 1 || isLoading}
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === 1 ? "#E2E8F0" : "#1E3A8A",
+            opacity: currentPage === 1 || isLoading ? 0.5 : 1,
+          }}
+        >
+          <ChevronsLeft size={18} color={currentPage === 1 ? "#94A3B8" : "#fff"} />
+        </TouchableOpacity>
+
+        {/* Previous Button */}
+        <TouchableOpacity
+          onPress={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || isLoading}
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === 1 ? "#E2E8F0" : "#3B82F6",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            opacity: currentPage === 1 || isLoading ? 0.5 : 1,
+          }}
+        >
+          <ChevronLeft size={16} color={currentPage === 1 ? "#94A3B8" : "#fff"} />
+          <Text style={{ color: currentPage === 1 ? "#94A3B8" : "#fff", fontWeight: "600" }}>Prev</Text>
+        </TouchableOpacity>
+
+        {/* Page Numbers */}
+        {getPageNumbers().map((page, index) => (
+          typeof page === 'number' ? (
+            <TouchableOpacity
+              key={index}
+              onPress={() => onPageChange(page)}
+              disabled={isLoading}
+              style={{
+                minWidth: 40,
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                backgroundColor: currentPage === page ? "#1E3A8A" : "#F1F5F9",
+                borderWidth: currentPage === page ? 0 : 1,
+                borderColor: "#E2E8F0",
+              }}
+            >
+              <Text style={{
+                textAlign: "center",
+                color: currentPage === page ? "#fff" : "#475569",
+                fontWeight: currentPage === page ? "700" : "500",
+              }}>
+                {page}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <Text key={index} style={{ color: "#94A3B8", paddingHorizontal: 4 }}>
+              {page}
+            </Text>
+          )
+        ))}
+
+        {/* Next Button */}
+        <TouchableOpacity
+          onPress={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || isLoading}
+          style={{
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === totalPages ? "#E2E8F0" : "#3B82F6",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 4,
+            opacity: currentPage === totalPages || isLoading ? 0.5 : 1,
+          }}
+        >
+          <Text style={{ color: currentPage === totalPages ? "#94A3B8" : "#fff", fontWeight: "600" }}>Next</Text>
+          <ChevronRight size={16} color={currentPage === totalPages ? "#94A3B8" : "#fff"} />
+        </TouchableOpacity>
+
+        {/* Last Page Button */}
+        <TouchableOpacity
+          onPress={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages || isLoading}
+          style={{
+            padding: 10,
+            borderRadius: 8,
+            backgroundColor: currentPage === totalPages ? "#E2E8F0" : "#1E3A8A",
+            opacity: currentPage === totalPages || isLoading ? 0.5 : 1,
+          }}
+        >
+          <ChevronsRight size={18} color={currentPage === totalPages ? "#94A3B8" : "#fff"} />
+        </TouchableOpacity>
+      </View>
+      
+      {/* Page Info */}
+      <Text style={{
+        marginTop: 12,
+        fontFamily: Typography.fonts.regular,
+        fontSize: 12,
+        color: "#64748B",
+      }}>
+        Page {currentPage} of {totalPages}
+      </Text>
+    </View>
+  );
+}
+
 export default function CustomerBookingsScreen() {
   const token = useAuthStore((s) => s.token);
   const { width: windowWidth } = useWindowDimensions();
   const isWide = windowWidth >= WIDE_BREAKPOINT;
   const horizontalPad = Math.max(16, Math.min(24, windowWidth * 0.04));
 
-  const [bookings,   setBookings]   = useState<ServiceRequest[]>([]);
-  const [loading,    setLoading]    = useState(true);
+  const [bookings, setBookings] = useState<ServiceRequest[]>([]);
+  const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [filter,     setFilter]     = useState<BookingStatus|"all">("all");
-  const [error,      setError]      = useState<string | null>(null);
-  const [confirmId,  setConfirmId]  = useState<string | null>(null);
-  const [feedback,   setFeedback]   = useState<{ ok:boolean; title:string; msg:string } | null>(null);
+  const [filter, setFilter] = useState<BookingStatus|"all">("all");
+  const [error, setError] = useState<string | null>(null);
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ ok:boolean; title:string; msg:string } | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalBookings, setTotalBookings] = useState(0);
 
-  const fetchBookings = useCallback(async (isRefresh = false) => {
+  const fetchBookings = useCallback(async (page: number = 1, isRefresh = false) => {
     if (!token) return;
+    
     isRefresh ? setRefreshing(true) : setLoading(true);
     setError(null);
+    
     try {
-      const data = await getBookings(token);
-      setBookings(data);
+      const statusParam = filter === "all" ? undefined : filter;
+      const response = await getBookingsPaginated(token, page, statusParam);
+      
+      setBookings(response.results);
+      setTotalPages(Math.ceil(response.count / 10)); // Assuming 10 items per page
+      setTotalBookings(response.count);
+      setCurrentPage(page);
+      
+      console.log(`📄 Loaded page ${page}: ${response.results.length} of ${response.count} bookings`);
     } catch (err: any) {
       setError(getApiError(err, "Failed to load bookings."));
-    } finally { setLoading(false); setRefreshing(false); }
-  }, [token]);
+    } finally { 
+      setLoading(false); 
+      setRefreshing(false); 
+    }
+  }, [token, filter]);
 
-  useEffect(() => { fetchBookings(); }, [fetchBookings]);
+  // Initial load and when filter changes
+  useEffect(() => { 
+    setCurrentPage(1);
+    fetchBookings(1); 
+  }, [fetchBookings]);
+
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
+      fetchBookings(newPage);
+      // Scroll to top when page changes
+      // You can add scrollToTop functionality here if needed
+    }
+  };
 
   const doCancel = async () => {
     if (!confirmId || !token) return;
@@ -318,13 +516,18 @@ export default function CustomerBookingsScreen() {
       const updated = await cancelBooking(id, token, "Cancelled by customer");
       setBookings(prev => prev.map(b => b.id === id ? updated : b));
       setFeedback({ ok:true, title:"Booking Cancelled ✓", msg:"Your booking has been successfully cancelled." });
+      
+      // Refresh current page after cancellation
+      setTimeout(() => {
+        fetchBookings(currentPage);
+      }, 500);
     } catch (err: any) {
       setFeedback({ ok:false, title:"Cannot Cancel", msg: getApiError(err, "Could not cancel this booking.") });
     }
   };
 
   const confirmBooking = bookings.find(b => b.id === confirmId);
-  const filtered = filter === "all" ? bookings : bookings.filter(b => b.status === filter);
+  const filtered = bookings; // Already filtered by API
 
   return (
     <View style={{ flex:1, backgroundColor:"#F8FAFC" }}>
@@ -348,7 +551,7 @@ export default function CustomerBookingsScreen() {
             <View style={{ flex:1, minWidth:0 }}>
               <Text style={{ fontFamily:Typography.fonts.extrabold, fontSize: isWide ? 28 : 24, color:"#fff" }}>My Bookings</Text>
               <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"rgba(255,255,255,0.6)", marginTop:2 }} numberOfLines={1}>
-                {bookings.length} total request{bookings.length !== 1 ? "s" : ""}
+                {totalBookings} total request{totalBookings !== 1 ? "s" : ""}
               </Text>
             </View>
             <TouchableOpacity onPress={() => router.push("/(customer)/booking/create" as any)}
@@ -359,7 +562,7 @@ export default function CustomerBookingsScreen() {
         </View>
       </LinearGradient>
 
-      {/* flexShrink:0 + minHeight stops this row collapsing when the list ScrollView grows (web / long lists). */}
+      {/* Filters */}
       <View
         style={{
           flexShrink: 0,
@@ -369,10 +572,6 @@ export default function CustomerBookingsScreen() {
           borderBottomColor: "#E2E8F0",
           zIndex: 2,
           elevation: 4,
-          shadowColor: "#0F172A",
-          shadowOffset: { width: 0, height: 1 },
-          shadowOpacity: Platform.OS === "ios" ? 0.06 : 0,
-          shadowRadius: 3,
         }}
       >
         {isWide ? (
@@ -393,7 +592,10 @@ export default function CustomerBookingsScreen() {
                 key={f.key}
                 label={f.label}
                 active={filter === f.key}
-                onPress={() => setFilter(f.key)}
+                onPress={() => {
+                  setFilter(f.key);
+                  setCurrentPage(1);
+                }}
               />
             ))}
           </View>
@@ -418,7 +620,10 @@ export default function CustomerBookingsScreen() {
                 key={f.key}
                 label={f.label}
                 active={filter === f.key}
-                onPress={() => setFilter(f.key)}
+                onPress={() => {
+                  setFilter(f.key);
+                  setCurrentPage(1);
+                }}
               />
             ))}
           </ScrollView>
@@ -435,7 +640,7 @@ export default function CustomerBookingsScreen() {
           <AlertCircle size={48} color="#EF4444" style={{ marginBottom:16 }} />
           <Text style={{ fontFamily:Typography.fonts.bold, fontSize:16, color:"#0F172A", marginBottom:8 }}>Failed to load</Text>
           <Text style={{ fontFamily:Typography.fonts.regular, fontSize:13, color:"#94A3B8", textAlign:"center", marginBottom:24 }}>{error}</Text>
-          <TouchableOpacity onPress={() => fetchBookings()}
+          <TouchableOpacity onPress={() => fetchBookings(currentPage)}
             style={{ flexDirection:"row", alignItems:"center", gap:8, backgroundColor:"#1E3A8A", paddingHorizontal:24, paddingVertical:12, borderRadius:16 }}>
             <RefreshCw size={16} color="#fff" />
             <Text style={{ fontFamily:Typography.fonts.semibold, fontSize:14, color:"#fff" }}>Retry</Text>
@@ -452,7 +657,7 @@ export default function CustomerBookingsScreen() {
             flexGrow: 1,
           }}
           showsVerticalScrollIndicator={false}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchBookings(true)} tintColor="#1E3A8A" colors={["#1E3A8A"]} />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => fetchBookings(currentPage, true)} tintColor="#1E3A8A" colors={["#1E3A8A"]} />}
         >
           <View style={{ width: "100%", maxWidth: CONTENT_MAX_WIDTH, alignSelf: "center" }}>
           {filtered.length === 0 ? (
@@ -473,9 +678,21 @@ export default function CustomerBookingsScreen() {
               )}
             </View>
           ) : (
-            filtered.map(b => (
-              <BookingCard key={b.id} booking={b} isWide={isWide} onCancel={id => setConfirmId(id)} />
-            ))
+            <>
+              {filtered.map(b => (
+                <BookingCard key={b.id} booking={b} isWide={isWide} onCancel={id => setConfirmId(id)} />
+              ))}
+              
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={handlePageChange}
+                  isLoading={loading || refreshing}
+                />
+              )}
+            </>
           )}
           </View>
         </ScrollView>

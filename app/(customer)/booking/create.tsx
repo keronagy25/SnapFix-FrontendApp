@@ -20,7 +20,7 @@ import {
 import { useAuthStore } from "@/store/authStore";
 import { Typography } from "@/theme/typography";
 import { getCategories, getRegions, type Category, type Region } from "@/services/coreService";
-import { createBooking, type CreateBookingPayload } from "@/services/bookingService";
+import { createBooking, createRecommendedBooking, saveRecommendedBookingCache, type CreateBookingPayload, type PhotoUpload } from "@/services/bookingService";
 
 const { width, height } = Dimensions.get('window');
 
@@ -684,9 +684,44 @@ function PaymentMethodModal({ visible, selected, onSelect, onClose }: {
   );
 }
 
+// Mode toggle component
+function ModeToggle({ isRecommended, onToggle }: { isRecommended: boolean; onToggle: (val: boolean) => void }) {
+  return (
+    <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 14, color: "#0F172A" }}>
+            {isRecommended ? "✨ AI Recommended Mode" : "📢 Broadcast Mode"}
+          </Text>
+          <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 11, color: "#64748B", marginTop: 2 }}>
+            {isRecommended 
+              ? "We'll find the best providers for you" 
+              : "All providers in your area can pick up"}
+          </Text>
+        </View>
+        <Switch
+          value={isRecommended}
+          onValueChange={onToggle}
+          trackColor={{ false: "#E2E8F0", true: "#1E3A8A" }}
+          thumbColor={isRecommended ? "#06B6D4" : "#94A3B8"}
+        />
+      </View>
+    </View>
+  );
+}
+
+function SRow({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+      <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#3B82F6" }}>{label}</Text>
+      <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 12, color: "#1D4ED8", maxWidth: "60%", textAlign: "right" }}>{value}</Text>
+    </View>
+  );
+}
+
 export default function BookingCreateScreen() {
   const token = useAuthStore((s) => s.token);
-  const params = useLocalSearchParams<{ category_id?: string; category_name?: string; is_urgent?: string }>();
+  const params = useLocalSearchParams<{ category_id?: string; category_name?: string; is_urgent?: string; useBroadcast?: string; formData?: string; cacheId?: string }>();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [regions, setRegions] = useState<Region[]>([]);
@@ -703,9 +738,30 @@ export default function BookingCreateScreen() {
   const [apiError, setApiError] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<{ ok: boolean; title: string; msg: string } | null>(null);
   
+  // Mode state - default to recommended mode
+  const [isRecommendedMode, setIsRecommendedMode] = useState(true);
+  
   // ✅ NEW: Photo states
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<PhotoUpload[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
+
+  // Check if we should default to broadcast mode from params
+  useEffect(() => {
+    if (params.useBroadcast === "true") {
+      setIsRecommendedMode(false);
+    }
+    if (params.formData) {
+      try {
+        const savedFormData = JSON.parse(params.formData);
+        // Pre-fill form if needed
+        if (savedFormData) {
+          setForm(prev => ({ ...prev, ...savedFormData }));
+        }
+      } catch (e) {
+        console.error("Failed to parse form data", e);
+      }
+    }
+  }, [params.useBroadcast, params.formData]);
 
   const [form, setForm] = useState({
     category_id: params.category_id ? Number(params.category_id) : 0,
@@ -759,11 +815,19 @@ export default function BookingCreateScreen() {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsMultipleSelection: true,
       quality: 0.8,
-      base64: false,
+      base64: Platform.OS === 'web',
     });
 
     if (!result.canceled && result.assets) {
-      const newPhotos = result.assets.map(asset => asset.uri);
+      const newPhotos = result.assets.map((asset, index) => {
+        const base64 = Platform.OS === 'web' && typeof asset.base64 === 'string' ? asset.base64 : undefined;
+        return {
+          uri: asset.uri,
+          fileName: asset.fileName ?? `photo_${Date.now()}_${index}.jpg`,
+          type: asset.type && asset.type !== 'image' ? asset.type : asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg',
+          base64,
+        };
+      });
       setPhotos([...photos, ...newPhotos]);
     }
   };
@@ -775,11 +839,18 @@ export default function BookingCreateScreen() {
     const result = await ImagePicker.launchCameraAsync({
       allowsEditing: true,
       quality: 0.8,
-      base64: false,
+      base64: Platform.OS === 'web',
     });
 
     if (!result.canceled && result.assets[0]) {
-      setPhotos([...photos, result.assets[0].uri]);
+      const asset = result.assets[0];
+      const base64 = Platform.OS === 'web' && typeof asset.base64 === 'string' ? asset.base64 : undefined;
+      setPhotos([...photos, {
+        uri: asset.uri,
+        fileName: asset.fileName ?? `photo_${Date.now()}.jpg`,
+        type: asset.type && asset.type !== 'image' ? asset.type : asset.uri?.endsWith('.png') ? 'image/png' : 'image/jpeg',
+        base64,
+      }]);
     }
   };
 
@@ -862,10 +933,47 @@ export default function BookingCreateScreen() {
         wallet_amount: form.wallet_amount.trim() || undefined,
       };
       
-      console.log("Submitting payload with photos:", photos.length);
-      const response = await createBooking(payload, token, photos);
-      console.log("Response:", response);
-      setSuccess(true);
+      if (isRecommendedMode) {
+        // NEW: Use recommended booking flow
+        const response = await createRecommendedBooking(payload, token, photos);
+        
+        if (response.recommendations && response.recommendations.length > 0) {
+          const cacheId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+          saveRecommendedBookingCache(cacheId, {
+            payload,
+            photos,
+          });
+
+          router.push({
+            pathname: "/(customer)/booking/recommendations",
+            params: {
+              data: JSON.stringify(response),
+              cacheId,
+            },
+          });
+        } else {
+          // No providers available - offer broadcast option
+          Alert.alert(
+            "No Providers Available",
+            "We couldn't find any providers matching your request. Would you like to create a broadcast request instead?",
+            [
+              { text: "Cancel", style: "cancel" },
+              { 
+                text: "Create Broadcast", 
+                onPress: () => {
+                  setIsRecommendedMode(false);
+                  // Retry as broadcast
+                  handleSubmit();
+                }
+              },
+            ]
+          );
+        }
+      } else {
+        // Original broadcast flow
+        const response = await createBooking(payload, token, photos);
+        setSuccess(true);
+      }
     } catch (err: any) {
       const d = err?.data ?? {};
       console.log("[BookingCreate] error:", JSON.stringify(d, null, 2));
@@ -993,7 +1101,10 @@ export default function BookingCreateScreen() {
           </View>
         )}
 
-        {/* ✅ PHOTO UPLOAD SECTION - NEW */}
+        {/* Mode Toggle */}
+        <ModeToggle isRecommended={isRecommendedMode} onToggle={setIsRecommendedMode} />
+
+        {/* ✅ PHOTO UPLOAD SECTION */}
         <View>
           <View style={{ backgroundColor: "#fff", borderRadius: 20, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: "#F1F5F9", shadowColor: "#1E3A8A", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8, elevation: 2 }}>
             <Text style={{ fontFamily: Typography.fonts.bold, fontSize: 15, color: "#0F172A", marginBottom: 14 }}>
@@ -1005,7 +1116,7 @@ export default function BookingCreateScreen() {
               {photos.map((photo, index) => (
                 <View key={index} style={{ position: 'relative' }}>
                   <Image 
-                    source={{ uri: photo }} 
+                    source={{ uri: typeof photo === 'string' ? photo : photo.uri }} 
                     style={{ width: 100, height: 100, borderRadius: 12 }}
                   />
                   <TouchableOpacity
@@ -1312,14 +1423,5 @@ export default function BookingCreateScreen() {
       <TimePicker visible={timePicker} value={form.preferred_time} onSelect={t => set("preferred_time", t)} onClose={() => setTimePicker(false)} />
       <PaymentMethodModal visible={paymentMethodPicker} selected={form.payment_method} onSelect={m => set("payment_method", m)} onClose={() => setPaymentMethodPicker(false)} />
     </KeyboardAvoidingView>
-  );
-}
-
-function SRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
-      <Text style={{ fontFamily: Typography.fonts.regular, fontSize: 12, color: "#3B82F6" }}>{label}</Text>
-      <Text style={{ fontFamily: Typography.fonts.semibold, fontSize: 12, color: "#1D4ED8", maxWidth: "60%", textAlign: "right" }}>{value}</Text>
-    </View>
   );
 }
